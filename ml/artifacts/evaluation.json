@@ -1,41 +1,41 @@
 {
-  "dataset_name": "Test Synthetic Dataset",
-  "evaluation_timestamp": "2026-09-24T23:03:49.336929",
+  "dataset_name": "Demo Commercial Office Energy Profile",
+  "evaluation_timestamp": "2026-09-24T23:14:51.004310",
   "validation_comparison": {
     "baseline_metrics": {
-      "MAE": 11.649,
-      "RMSE": 13.5069,
-      "CV(RMSE)": 27.73,
-      "sMAPE": 24.35,
-      "R2": -0.009
+      "MAE": 2.6657,
+      "RMSE": 4.7949,
+      "CV(RMSE)": 8.48,
+      "sMAPE": 7.12,
+      "R2": 0.9918
     },
     "ml_metrics": {
-      "MAE": 1.0122,
-      "RMSE": 1.2293,
-      "CV(RMSE)": 2.52,
-      "sMAPE": 2.22,
-      "R2": 0.9916
+      "MAE": 2.6571,
+      "RMSE": 6.7067,
+      "CV(RMSE)": 11.87,
+      "sMAPE": 7.8,
+      "R2": 0.9839
     },
-    "improvement_vs_baseline_pct": 91.31,
+    "improvement_vs_baseline_pct": 0.32,
     "ml_outperformed_baseline": true
   },
   "test_comparison": {
     "baseline_metrics": {
-      "MAE": 1.038,
-      "RMSE": 1.2226,
-      "CV(RMSE)": 2.3,
-      "sMAPE": 2.06,
-      "R2": 0.9928
+      "MAE": 3.1824,
+      "RMSE": 7.1307,
+      "CV(RMSE)": 13.76,
+      "sMAPE": 7.01,
+      "R2": 0.9822
     },
     "ml_metrics": {
-      "MAE": 1.0368,
-      "RMSE": 1.26,
-      "CV(RMSE)": 2.37,
-      "sMAPE": 2.01,
-      "R2": 0.9924
+      "MAE": 4.1013,
+      "RMSE": 10.3354,
+      "CV(RMSE)": 19.95,
+      "sMAPE": 9.24,
+      "R2": 0.9625
     },
-    "improvement_vs_baseline_pct": 0.12,
-    "ml_outperformed_baseline": true
+    "improvement_vs_baseline_pct": -28.87,
+    "ml_outperformed_baseline": false
   },
   "acceptance_criteria_met": true
 }

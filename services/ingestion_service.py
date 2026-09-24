@@ -141,11 +141,15 @@ def load_energy_csv(file: Any) -> pd.DataFrame:
             converted = pd.to_numeric(df["energy_kwh"], errors="coerce")
             nan_diff = int(converted.isna().sum() - df["energy_kwh"].isna().sum())
             if nan_diff > 0:
-                validation_info["non_numeric_errors"].append(f"energy_kwh contains {nan_diff} non-numeric values.")
+                err_msg = f"energy_kwh contains {nan_diff} non-numeric values."
+                validation_info["non_numeric_errors"].append(err_msg)
+                validation_info["errors"].append(err_msg)
                 validation_info["is_valid"] = False
             df["energy_kwh"] = converted
         except Exception:
-            validation_info["non_numeric_errors"].append("energy_kwh is not numeric.")
+            err_msg = "energy_kwh is not numeric."
+            validation_info["non_numeric_errors"].append(err_msg)
+            validation_info["errors"].append(err_msg)
             validation_info["is_valid"] = False
 
     # Check for negative energy

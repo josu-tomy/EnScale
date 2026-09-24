@@ -124,3 +124,44 @@ def test_baseline_service_equipment_aggregation():
     res = service.compute_equipment_baseline([eq1, eq2])
     assert res["baseline_energy_kwh"] == 6000.0
     assert len(res["equipment_breakdown"]) == 2
+
+
+def test_equipment_zero_utilization():
+    """Verifies that an equipment with utilization_factor=0.0 yields 0.0 kWh."""
+    eq_idle = Equipment(
+        equipment_id="EQ-BACKUP-01",
+        equipment_type="Generator",
+        equipment_name="Emergency Generator",
+        rated_power_kw=100.0,
+        quantity=1,
+        hours_per_day=24.0,
+        operating_days=30,
+        utilization_factor=0.0,
+        minimum_hours=0.0,
+        maximum_hours=0.0,
+        is_flexible=False,
+    )
+    res = calculate_equipment_energy([eq_idle])
+    assert res["total_energy"] == 0.0
+    assert res["per_equipment_energy"][0]["estimated_energy_kwh"] == 0.0
+
+
+def test_single_equipment_baseline():
+    """Verifies baseline calculation for a single standalone equipment item."""
+    eq_chiller = Equipment(
+        equipment_id="EQ-CHILL-30",
+        equipment_type="HVAC",
+        equipment_name="Water Chiller",
+        rated_power_kw=30.0,
+        quantity=1,
+        hours_per_day=8.0,
+        operating_days=20,
+        utilization_factor=0.8,
+        minimum_hours=4.0,
+        maximum_hours=8.0,
+        is_flexible=True,
+    )
+    res = calculate_equipment_energy([eq_chiller])
+    # 30 * 1 * 8 * 20 * 0.8 = 3840 kWh
+    assert res["total_energy"] == 3840.0
+    assert len(res["per_equipment_energy"]) == 1

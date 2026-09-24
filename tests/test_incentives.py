@@ -270,3 +270,32 @@ def test_calculate_equipment_upgrade_payback_insufficient_data():
     )
     assert res_zero_savings["status"] == "Payback unavailable."
     assert res_zero_savings["modeled_payback_years"] is None
+
+
+def test_find_incentives_technology_filtering_mismatch():
+    """Verifies that technology mismatch properly excludes non-applicable programs."""
+    eq_lighting = Equipment(
+        equipment_id="EQ-LIGHT-01",
+        equipment_type="Lighting",
+        equipment_name="LED Office Lights",
+        rated_power_kw=10.0,
+        quantity=1,
+        hours_per_day=12.0,
+        operating_days=22,
+        utilization_factor=1.0,
+        minimum_hours=8.0,
+        maximum_hours=12.0,
+        is_flexible=False,
+    )
+    matches = find_incentives(
+        location_state="Delhi",
+        building_type="Commercial Office",
+        equipment_list=[eq_lighting],
+    )
+    matched_ids = [m["incentive"]["incentive_id"] for m in matches]
+    # Specialized chiller program (INC-EESL-CHILL-03) should NOT match lighting
+    assert "INC-EESL-CHILL-03" not in matched_ids
+    # SIDBI 4E (Motors/compressors/boilers) should NOT match commercial lighting
+    assert "INC-SIDBI-4E-02" not in matched_ids
+    # Delhi DSM rebate (INC-DEL-DSM-07) covers lighting and should match
+    assert "INC-DEL-DSM-07" in matched_ids

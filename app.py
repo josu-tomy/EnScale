@@ -668,6 +668,7 @@ def main() -> None:
             building_type=b.building_type,
             equipment_list=eq_list,
         )
+        st.session_state["matched_incentives"] = matches
 
         if matches:
             for idx, m in enumerate(matches):

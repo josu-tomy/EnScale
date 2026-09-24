@@ -114,3 +114,45 @@ def test_load_demo_scenario():
     assert demo["mode"] == DataMode.MODE_3_DEMO
     assert demo["building_profile"].building_id == "BLD-DEMO-001"
     assert demo["building_profile"].net_built_up_area_m2 == 2500.0
+
+
+def test_load_energy_csv_missing_timestamp():
+    """Verifies that missing timestamp column raises a clear validation ValueError."""
+    csv_data = io.StringIO("energy_kwh,temperature_c\n45.2,28.5\n")
+    with pytest.raises(ValueError, match="Missing required energy column: 'timestamp'"):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_missing_energy_kwh():
+    """Verifies that missing energy_kwh column raises a clear validation ValueError."""
+    csv_data = io.StringIO("timestamp,temperature_c\n2026-08-01 00:00:00,28.5\n")
+    with pytest.raises(ValueError, match="Missing required energy column: 'energy_kwh'"):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_invalid_timestamp():
+    """Verifies that unparseable timestamp format raises a validation ValueError."""
+    csv_data = io.StringIO(
+        "timestamp,energy_kwh\n"
+        "not-a-valid-date,45.2\n"
+        "2026-08-01 01:00:00,42.0\n"
+    )
+    with pytest.raises(ValueError, match="could not be parsed as datetime format"):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_empty_file():
+    """Verifies that empty file raises a ValueError or EmptyDataError."""
+    csv_data = io.StringIO("")
+    with pytest.raises(Exception):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_malformed_values():
+    """Verifies that non-numeric energy_kwh values raise a validation ValueError."""
+    csv_data = io.StringIO(
+        "timestamp,energy_kwh\n"
+        "2026-08-01 00:00:00,corrupted_value\n"
+    )
+    with pytest.raises(ValueError, match="contains .* non-numeric values"):
+        load_energy_csv(csv_data)
