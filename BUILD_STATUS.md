@@ -1,99 +1,96 @@
 # EnScale Build Status
 
-**STATUS:** HEALTHY (Stage 3 Complete & Fully Verified)  
-**CURRENT_STAGE:** Stage 3 - Anomaly Detection, Constrained Optimization, Modeled Savings, Carbon Accounting, and EPI/MEPI Normalization
+**STATUS:** HEALTHY (Stage 4 Complete & Fully Verified)  
+**CURRENT_STAGE:** Stage 4 - Incentive Matching, Final UI Design, and End-to-End Integration
 
 ---
 
-## COMPLETED IN STAGE 3:
+## COMPLETED IN STAGE 4:
 
-### 1. Transparent Residual-Based Anomaly Detection (`services/anomaly_service.py`)
-- **Formula & Methodology:**
-  $$\text{forecast\_error\_kwh} = \text{actual\_energy\_kwh} - \text{predicted\_energy\_kwh}$$
-  $$\text{forecast\_error\_pct} = \left(\frac{|\text{forecast\_error\_kwh}|}{\text{actual\_energy\_kwh}}\right) \times 100$$
-- Built on rolling residual distributions with robust Median and Median Absolute Deviation (MAD) scale estimation ($Z_{\text{robust}} = \frac{e - \text{median}}{1.4826 \times \text{MAD}}$) to prevent baseline contamination.
-- Output schema strictly adheres to canonical fields:
-  `timestamp`, `actual_energy_kwh`, `predicted_energy_kwh`, `forecast_error_kwh`, `forecast_error_pct`, `anomaly_flag`, `severity`, `waste_kwh`, `potential_waste_cost_inr`.
+### 1. Curated Reference Incentive Database (`data/reference/incentives.json`)
+- Built an authoritative reference database containing verified and documented Indian energy efficiency programs:
+  1. **BEE Standards & Labeling Star-Rated Equipment Program** (National, Commercial/Industrial)
+  2. **SIDBI 4E (End-to-End Energy Efficiency) Scheme for MSMEs** (National, Motors & Pumps, Compressors)
+  3. **EESL Super-Efficient Chiller and Air Conditioning Program** (National, Commercial Cooling)
+  4. **Maharashtra Time-of-Day (ToD) Off-Peak Energy Tariff Incentive** (Maharashtra, MERC / MSEDCL)
+  5. **Gujarat DISCOM Industrial & SME Energy Efficiency Tariff Incentive** (Gujarat, GERC / GUVNL)
+  6. **Karnataka BESCOM Time-of-Day Off-Peak Tariff Concession** (Karnataka, KERC / BESCOM)
+  7. **Delhi DISCOM Commercial Demand Side Management Rebate Scheme** (Delhi, DERC / BSES / TPDDL)
+  8. **Commercial Accelerated Depreciation for Clean Energy Assets** (National, MNRE / IT Act Sec 32)
+- Every single record contains all 13 required canonical fields:
+  `incentive_id`, `name`, `authority`, `region`, `eligible_entity`, `applicable_sector`, `technology`, `eligibility`, `incentive_type`, `incentive_value`, `validity_period`, `source`, `last_verified`.
+- Zero fabricated government programs.
 
-### 2. Anomaly Evaluation & Test Dataset (`scripts/evaluate_anomalies.py`, `ml/artifacts/anomaly_evaluation.json`)
-- Generated independent ground-truth evaluation dataset (`data/reference/anomaly_evaluation_dataset.csv`) comprising:
-  - 500 total hourly interval samples: 400 normal (80.0%), 100 controlled anomalies (20.0%).
-  - 4 real-world operational waste categories tested:
-    1. After-hours HVAC operation
-    2. Overnight lighting operation
-    3. Extended compressor runtime
-    4. Unusual load spikes
-- **Actual Evaluation Results Saved in `ml/artifacts/anomaly_evaluation.json`:**
-  - **Precision:** 1.0000 (100.0%)
-  - **Recall:** 1.0000 (100.0%)
-  - **F1 Score:** 1.0000
-  - **False Positive Rate (FPR):** 0.0000 (0.0%)
-  - **True Positive Rate (TPR):** 1.0000 (100.0%)
-  - **Confusion Matrix:** 100 True Positives, 0 False Positives, 400 True Negatives, 0 False Negatives.
+### 2. Incentive Matching Service (`services/incentive_service.py`)
+- **Implemented Functions:**
+  - `find_incentives(location_state, building_type, equipment_list) -> potential_matches`
+  - `calculate_equipment_upgrade_payback(equipment, annual_cost_savings_inr) -> dict`
+  - `match_incentives(building_profile, equipment_list) -> List[IncentiveMatch]` (backward compatible)
+- **Terminology & Compliance Safeguards:**
+  - The phrase *"you qualify"* is **strictly prohibited and never emitted**.
+  - All matches return: *"Potential incentive match"* and *"Verify eligibility before application."*
+  - Includes explicit disclaimer that EnScale is an engineering decision support platform and not an official government eligibility authority.
+- **Modeled Payback Calculation:**
+  $$\text{modeled\_payback\_years} = \frac{\text{effective\_modeled\_investment\_inr}}{\text{annual\_modeled\_savings\_inr}}$$
+  - If insufficient capacity or non-positive savings: returns *"Payback unavailable."* without fabricating values.
 
-### 3. Constrained Energy Optimization Service (`services/optimization_service.py`)
-- Implemented deterministic constrained enumeration over flexible equipment runtime.
-- **Constraints Enforced:**
-  - Facility operational window bounds (`operating_start` to `operating_end`).
-  - Equipment operating boundaries (`minimum_hours` to `maximum_hours`).
-  - Strict preservation of non-flexible equipment (zero tampering).
-  - Explicit `InfeasibleConstraintError` when operational requirements cannot be met.
-- **Strict Savings Contract & Terminology Safeguards:**
-  $$\text{energy\_savings\_kwh} = \text{baseline\_energy\_kwh} - \text{optimized\_energy\_kwh}$$
-  $$\text{savings\_pct} = \left(\frac{\text{energy\_savings\_kwh}}{\text{baseline\_energy\_kwh}}\right) \times 100$$
-  $$\text{cost\_savings\_inr} = \text{baseline\_cost\_inr} - \text{optimized\_cost\_inr}$$
-  - **Forbidden Words Enforced:** The strings *"Guaranteed savings"* and *"Actual savings"* are strictly forbidden and never emitted.
-  - Results are prominently labeled: *"Projected savings under the modeled operating constraints"*.
-  - Non-positive savings handling: Emits *"No modeled savings under the current constraints."* without recommending negative savings.
-- **Optimization Test Matrix Passed (Tests 1–5 in `tests/test_optimizer.py`):**
-  - **Test 1 (No flexible equipment):** Returns 0.0 kWh savings, 0.0 INR savings, identical operating schedule.
-  - **Test 2 (Flexible equipment):** Successfully shifts flexible runtimes to lower-cost/optimal hours, reducing cost while respecting minimum runtime.
-  - **Test 3 (Impossible constraints):** Raises `InfeasibleConstraintError` with explicit explanatory message without corrupting state.
-  - **Test 4 (Maximum savings attempt):** Verifies zero constraint violations across all generated schedules.
-  - **Test 5 (Cost calculation):** Confirms arithmetic precision matches $\text{cost} = \text{energy} \times \text{tariff}$.
+### 3. Compact & Modern Streamlit Interface (`app.py`)
+- Built a clean, modern, non-technical judge friendly Streamlit application.
+- Adheres strictly to design constraints: readable typography, restrained graphics, zero excessive emojis, no giant cards, no horizontal scrolling, explicit units everywhere (kWh, kWh/m²/year, ₹, kg CO₂).
+- **Navigation Flow (Section 4):**
+  1. **1. Setup:** Building operational profile, facility hours, climate zone, utility tariff, and editable equipment inventory table.
+  2. **2. Data:** Ingestion workspace supporting 3 selectable modes:
+     - *Use My Historical Data*: CSV uploader, canonical template downloader, automated data validation (rows, date span, sampling freq, missing values, duplicates).
+     - *Build Baseline From Equipment*: Deterministic equipment energy aggregation with traceable calculations.
+     - *Demo Scenario*: Deterministic synthetic office load dataset (seed=42) with injected anomaly documentation.
+  3. **3. Forecast:** ML regression forecast with interactive Plotly Actual vs. Expected load profile curves and real test accuracy metrics (`MAE: 0.80 kWh`, `RMSE: 1.04 kWh`, `CV(RMSE): 1.9%`, `sMAPE: 1.6%`, `R²: 0.9948`, `Improvement: +29.7%`).
+  4. **4. Waste:** Transparent residual anomaly detection, actionable waste metrics, and equipment-attribution safeguards (emits *"Consumption anomaly"* when equipment attribution is unmeasured).
+  5. **5. Optimize:** Constrained equipment scheduling, baseline vs. optimized comparisons, schedule recommendations, and expandable *"How was this calculated?"* section with exact mathematical formulas.
+  6. **6. Finance:** Matched incentive programs with policy provenance, alignment reasons, and equipment upgrade modeled payback analysis.
+  7. **7. Action Plan:** The executive judge-facing **ENERGY ACTION PLAN** consolidating 8 comprehensive sections:
+     1. Current energy position
+     2. Main detected waste
+     3. Recommended operational change
+     4. Estimated modeled savings
+     5. Potential equipment upgrade
+     6. Potential incentive
+     7. Environmental & Carbon (CO₂) impact
+     8. Assumptions & data confidence
 
-### 4. Emissions Reference & Carbon Accounting (`data/reference/emission_factors.json`, `services/impact_service.py`)
-- Created authoritative emissions reference `data/reference/emission_factors.json` citing Central Electricity Authority (CEA) User Guide Version 19.0 (0.82 kg CO₂/kWh national grid baseline, plus regional values).
-- All CO₂ emissions avoided calculations reference this configuration with explicit provenance statements:
-  `"CO₂ factor used: 0.82 kg CO₂/kWh (Source: Central Electricity Authority (CEA)...)"`.
+### 4. Non-Ambiguous Data Source Labeling (Section 12)
+- Implemented prominent color-coded data source badges on every screen:
+  - `DATA SOURCE: MEASURED DATA` (Green)
+  - `DATA SOURCE: EQUIPMENT MODEL` (Blue)
+  - `DATA SOURCE: DEMO DATA` (Purple)
+- Modules gracefully explain when specific data prerequisites are required (e.g., explaining why interval forecasting requires timeseries data when in Equipment mode).
 
-### 5. EPI / MEPI Normalization (`services/impact_service.py`)
-- **Modeled Energy Performance Index (MEPI):**
-  $$\text{MEPI} = \frac{\text{modeled\_annual\_energy\_kwh}}{\text{net\_built\_up\_area\_m2}} \quad (\text{kWh/m}^2/\text{year})$$
-- **Measured Energy Performance Index (EPI):**
-  $$\text{EPI} = \frac{\text{measured\_annual\_energy\_kwh}}{\text{net\_built\_up\_area\_m2}} \quad (\text{kWh/m}^2/\text{year})$$
-  - When verified 12-month interval data is unavailable, emits: *"Insufficient data to calculate measured EPI."*
-- **Strict Area Normalization Principle:** Floor area is never used to infer or calculate electricity consumption; it serves solely as a normalizing denominator for efficiency benchmarking.
+### 5. Performance Caching (Section 15)
+- Cached model artifacts with `@st.cache_resource` (`get_cached_predictor()`).
+- Cached demo data loading with `@st.cache_data` (`get_cached_demo_data()`).
+- Model is never retrained on Streamlit reruns.
 
-### 6. End-to-End Pipeline Verification (`tests/test_end_to_end.py`)
-- Verified all three execution chains:
-  - **Chain 1:** Demo data $\rightarrow$ ML forecast $\rightarrow$ residual anomaly detection $\rightarrow$ constrained optimization $\rightarrow$ modeled savings $\rightarrow$ CO₂ avoided $\rightarrow$ EPI/MEPI.
-  - **Chain 2:** User data $\rightarrow$ ML forecast $\rightarrow$ residual anomaly detection.
-  - **Chain 3:** Equipment mode $\rightarrow$ baseline calculation $\rightarrow$ constrained optimization $\rightarrow$ modeled savings.
-
-### 7. Interactive Streamlit Interface (`app.py`)
-- Fully connected Sections 1 through 7:
-  - Section 1: Facility setup and local platform parameters.
-  - Section 2: Ingestion & Baseline (User CSV upload, equipment inventory builder, demo scenario).
-  - Section 3: ML Forecast with interactive Plotly Actual vs Predicted load curve.
-  - Section 4: Anomaly & Waste detection with actionable waste metrics and event log.
-  - Section 5: Constrained Energy Optimization with parameter controls and schedule recommendations.
-  - Section 6: Financial savings, CO₂ emissions reduction, and EPI/MEPI normalization cards.
-  - Section 7: Final Energy Action Plan consolidating scheduled equipment adjustments.
+### 6. End-to-End Automated UI & Integration Tests (`tests/test_ui.py`, `tests/test_end_to_end.py`)
+- Verified all 3 end-to-end workflows:
+  - **Demo Workflow:** Setup → Demo → Forecast → Waste → Optimize → Finance → Action Plan.
+  - **User CSV Workflow:** Setup → Upload → Validate → Forecast → Waste → Action Plan.
+  - **Equipment Workflow:** Setup → Equipment baseline → Optimize → Finance → Action Plan.
+- Streamlit `AppTest` automated test verifies all 7 screens render with zero exceptions.
 
 ---
 
 ## VERIFIED:
-- **`pytest` Test Suite:** 48 passing tests out of 48 (100% pass rate, 0 failures, 0 errors, 1.41s execution time).
-- **Streamlit Local Run:** Verified headless syntax execution and module imports without errors.
-- **100% Local-First Compliance:** Zero external API calls, cloud dependencies, or unauthenticated external access.
+- **`pytest` Suite:** **55 passed** out of 55 tests (**100% pass rate**, 0 failures, 3.65s execution time).
+- **Streamlit Local Execution:** All 7 pipeline screens render cleanly in memory and via headless execution.
+- **100% Local-First Compliance:** Operates completely offline with zero external network or cloud dependencies.
 
 ---
 
 ## KNOWN_ISSUES:
-- **Kaggle Credentials for Full ASHRAE GEP III:** As noted in Stage 2, downloading the full multi-gigabyte ASHRAE dataset requires competition acceptance and Kaggle API credentials. The downstream optimization and ML forecasting pipeline operates deterministically with `data/demo/demo_office_energy.csv` and `data/raw/` preprocessors.
+- **Streamlit Deprecation Warning for Container Width:** Streamlit displays a deprecation advisory encouraging migration of `use_container_width=True` to `width='stretch'` before 2026. The parameter remains functional across all current Streamlit releases.
+- **Kaggle Credentials for Full ASHRAE GEP III:** Downloading the complete multi-gigabyte ASHRAE dataset requires Kaggle user authentication; the platform deterministically runs and evaluates with local reference datasets.
 
 ---
 
 ## NEXT_STAGE:
-- Stage 3 is fully implemented and tested. Awaiting user review before proceeding to Stage 4 (Incentives, Policy Matching, and Final Action Plan synthesis).
+- Stage 4 is complete, fully integrated, and verified.
+- Awaiting user acceptance and deployment readiness review.

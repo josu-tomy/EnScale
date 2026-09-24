@@ -368,6 +368,25 @@ def test_execution_chain_1_demo_pipeline():
     assert impact.mepi_kwh_m2_year > 0
     assert impact.measured_epi_status == "Insufficient data to calculate measured EPI."
 
+    # 6. Finance & Incentive Matching
+    from services.incentive_service import find_incentives, calculate_equipment_upgrade_payback
+    matches = find_incentives(
+        location_state=b_profile.location_state,
+        building_type=b_profile.building_type,
+        equipment_list=eq_list,
+    )
+    assert len(matches) > 0
+    assert "Potential incentive match" in matches[0]["eligibility_notes"]
+    assert "you qualify" not in str(matches).lower()
+
+    # Equipment Upgrade Payback
+    payback = calculate_equipment_upgrade_payback(
+        equipment=eq_list[0],
+        annual_cost_savings_inr=impact.annual_cost_savings,
+    )
+    assert payback["status"] == "Calculated"
+    assert payback["modeled_payback_years"] > 0
+
 
 def test_execution_chain_2_user_data_pipeline():
     """
@@ -483,4 +502,16 @@ def test_execution_chain_3_equipment_pipeline():
     assert opt_result.cost_savings_inr == round(opt_result.baseline_cost_inr - opt_result.optimized_cost_inr, 2)
     assert "Guaranteed" not in opt_result.savings_statement
     assert "Actual savings" not in opt_result.savings_statement
+
+    # 5. Finance & Incentive Matching
+    from services.incentive_service import find_incentives
+    matches = find_incentives(
+        location_state=b_profile.location_state,
+        building_type=b_profile.building_type,
+        equipment_list=eq_list,
+    )
+    assert len(matches) > 0
+    for m in matches:
+        assert "Verify eligibility before application" in m["eligibility_notes"]
+
 
