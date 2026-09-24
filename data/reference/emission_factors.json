@@ -1,0 +1,41 @@
+{
+  "default_region": "India_National_Grid",
+  "factors": {
+    "India_National_Grid": {
+      "factor_kg_co2_per_kwh": 0.82,
+      "unit": "kg CO2 / kWh",
+      "source": "Central Electricity Authority CO2 Baseline Database (version and year to be confirmed by the user)",
+      "last_verified": null,
+      "verification_status": "UNVERIFIED — check against the official source before relying",
+      "verified_by_human": false,
+      "description": "Assumed grid emission factor — unverified"
+    },
+    "India_Northern_Region": {
+      "factor_kg_co2_per_kwh": 0.85,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "last_verified": null,
+      "verification_status": "UNVERIFIED — check against the official source before relying",
+      "verified_by_human": false,
+      "description": "Northern regional grid emission factor"
+    },
+    "India_Western_Region": {
+      "factor_kg_co2_per_kwh": 0.83,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "last_verified": null,
+      "verification_status": "UNVERIFIED — check against the official source before relying",
+      "verified_by_human": false,
+      "description": "Western regional grid emission factor"
+    },
+    "India_Southern_Region": {
+      "factor_kg_co2_per_kwh": 0.79,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "last_verified": null,
+      "verification_status": "UNVERIFIED — check against the official source before relying",
+      "verified_by_human": false,
+      "description": "Southern regional grid emission factor"
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "model_type": "HistGradientBoostingRegressor",
+  "feature_columns": [
+    "hour",
+    "day_of_week",
+    "day_of_month",
+    "month",
+    "is_weekend",
+    "hour_sin",
+    "hour_cos",
+    "air_temperature",
+    "occupancy"
+  ],
+  "dataset_name": "Demo Commercial Office Energy Profile",
+  "dataset_manifest": {
+    "dataset_name": "Demo Commercial Office Energy Profile",
+    "dataset_label": "Demo dataset \u00e2\u20ac\u201d simulated",
+    "source": "Synthetically generated with deterministic seed (seed=42)",
+    "is_real_world_measurement": false,
+    "rows_count": 1488,
+    "date_range": {
+      "start": "2026-07-01 00:00:00",
+      "end": "2026-08-31 23:00:00"
+    },
+    "sampling_frequency": "1 hour",
+    "injected_anomalies": [
+      {
+        "date": "2026-07-03",
+        "hours": "19:00 - 23:00",
+        "type": "HVAC operating after closing",
+        "description": "Cooling chillers left active overnight after office closing."
+      },
+      {
+        "date": "2026-07-05",
+        "hours": "01:00 - 06:00",
+        "type": "Lighting operating overnight",
+        "description": "Floor LED arrays left energized during empty Sunday overnight."
+      },
+      {
+        "date": "2026-08-10",
+        "hours": "19:00 - 23:00",
+        "type": "HVAC operating after closing",
+        "description": "Chiller and AHU units remained at day setpoint after office closing."
+      },
+      {
+        "date": "2026-08-16",
+        "hours": "01:00 - 06:00",
+        "type": "Lighting operating overnight",
+        "description": "Floor LED arrays left energized during empty Sunday overnight."
+      },
+      {
+        "date": "2026-08-24",
+        "hours": "12:00 - 17:00",
+        "type": "Compressor extended operation",
+        "description": "Air compressor failed to unload, running continuous full-duty cycle."
+      }
+    ]
+  },
+  "training_date": "2026-09-25T01:51:47.645168",
+  "train_rows": 1041,
+  "validation_rows": 223,
+  "test_rows": 224,
+  "metrics": {
+    "validation": {
+      "baseline_metrics": {
+        "MAE": 4.5631,
+        "RMSE": 6.9491,
+        "CV(RMSE)": 11.22,
+        "sMAPE": 9.71,
+        "R2": 0.9833
+      },
+      "ml_metrics": {
+        "MAE": 2.9975,
+        "RMSE": 5.3121,
+        "CV(RMSE)": 8.58,
+        "sMAPE": 9.12,
+        "R2": 0.9902
+      },
+      "improvement_vs_baseline_pct": 34.31,
+      "ml_outperformed_baseline": true
+    },
+    "test": {
+      "baseline_metrics": {
+        "MAE": 5.564,
+        "RMSE": 10.4513,
+        "CV(RMSE)": 18.81,
+        "sMAPE": 10.25,
+        "R2": 0.9641
+      },
+      "ml_metrics": {
+        "MAE": 3.6345,
+        "RMSE": 7.1616,
+        "CV(RMSE)": 12.89,
+        "sMAPE": 10.05,
+        "R2": 0.9832
+      },
+      "improvement_vs_baseline_pct": 34.68,
+      "ml_outperformed_baseline": true
+    }
+  }
+}

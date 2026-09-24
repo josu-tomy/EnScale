@@ -1,0 +1,41 @@
+{
+  "dataset_name": "Demo Commercial Office Energy Profile",
+  "evaluation_timestamp": "2026-09-25T01:51:47.646022",
+  "validation_comparison": {
+    "baseline_metrics": {
+      "MAE": 4.5631,
+      "RMSE": 6.9491,
+      "CV(RMSE)": 11.22,
+      "sMAPE": 9.71,
+      "R2": 0.9833
+    },
+    "ml_metrics": {
+      "MAE": 2.9975,
+      "RMSE": 5.3121,
+      "CV(RMSE)": 8.58,
+      "sMAPE": 9.12,
+      "R2": 0.9902
+    },
+    "improvement_vs_baseline_pct": 34.31,
+    "ml_outperformed_baseline": true
+  },
+  "test_comparison": {
+    "baseline_metrics": {
+      "MAE": 5.564,
+      "RMSE": 10.4513,
+      "CV(RMSE)": 18.81,
+      "sMAPE": 10.25,
+      "R2": 0.9641
+    },
+    "ml_metrics": {
+      "MAE": 3.6345,
+      "RMSE": 7.1616,
+      "CV(RMSE)": 12.89,
+      "sMAPE": 10.05,
+      "R2": 0.9832
+    },
+    "improvement_vs_baseline_pct": 34.68,
+    "ml_outperformed_baseline": true
+  },
+  "acceptance_criteria_met": true
+}
