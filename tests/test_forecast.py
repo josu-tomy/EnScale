@@ -125,7 +125,7 @@ def test_metric_calculations():
     assert comp["ml_outperformed_baseline"] is True
 
 
-def test_model_training_and_artifacts(tmp_path):
+def test_model_training_and_artifacts():
     """
     Verifies end-to-end training, saving of artifacts, and metadata.json structure.
     """
@@ -136,13 +136,13 @@ def test_model_training_and_artifacts(tmp_path):
         "temperature_c": 25.0 + 5.0 * np.sin(date_range.hour * np.pi / 12),
     })
 
-    metadata = train_and_evaluate(df, dataset_name="Test Synthetic Dataset", output_dir=tmp_path)
+    metadata = train_and_evaluate(df, dataset_name="Test Synthetic Dataset")
     assert metadata["train_rows"] == 140
     assert metadata["validation_rows"] == 30
     assert metadata["test_rows"] == 30
-    assert (tmp_path / "model.joblib").exists()
-    assert (tmp_path / "metadata.json").exists()
-    assert (tmp_path / "evaluation.json").exists()
+    assert (ML_ARTIFACTS_DIR / "model.joblib").exists()
+    assert (ML_ARTIFACTS_DIR / "metadata.json").exists()
+    assert (ML_ARTIFACTS_DIR / "evaluation.json").exists()
 
 
 def test_energy_predictor_prediction_output():

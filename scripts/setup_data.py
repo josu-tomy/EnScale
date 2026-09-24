@@ -35,39 +35,67 @@ def generate_demo_dataset() -> None:
 
     for dt in date_range:
         hour = dt.hour
-        is_weekend = dt.dayofweek >= 5
+        is_sunday = dt.dayofweek == 6
+        is_saturday = dt.dayofweek == 5
+        day_idx = (dt - date_range[0]).days
+        day_of_week = dt.dayofweek
 
-        # Ambient diurnal temperature profile (celsius)
-        temp_c = 27.0 + 7.5 * np.sin((hour - 9) * np.pi / 12) + np.random.normal(0, 0.8)
+        # Multi-day weather cycle (warmer vs cooler days)
+        weather_variation = 3.2 * np.sin(day_idx * 2 * np.pi / 8.5)
+        temp_c = 26.5 + weather_variation + 7.0 * np.sin((hour - 9) * np.pi / 12) + np.random.normal(0, 0.6)
 
-        # Baseline occupancy
-        if is_weekend or hour < 8 or hour >= 19:
-            occupancy = float(max(0, np.random.poisson(3)))
-            base_load = 18.0 + np.random.normal(0, 1.2)
+        # Baseline occupancy and base energy
+        if is_sunday or hour < 7 or hour >= 19:
+            occupancy = float(max(0, np.random.poisson(2)))
+            base_load = 17.5 + np.random.normal(0, 1.0)
+        elif is_saturday:
+            # Saturday partial half-day activity (09:00 - 14:00)
+            if 9 <= hour <= 14:
+                occupancy = float(np.random.normal(45, 5))
+                cooling = max(0.0, (temp_c - 24.0) * 2.2)
+                base_load = 48.0 + cooling + (occupancy * 0.12) + np.random.normal(0, 2.0)
+            else:
+                occupancy = float(max(0, np.random.poisson(3)))
+                base_load = 20.0 + np.random.normal(0, 1.2)
         else:
-            # Working hours: 09:00 - 18:00
-            occupancy = float(np.random.normal(140, 8))
-            cooling_demand = max(0.0, (temp_c - 24.0) * 3.8)
-            base_load = 80.0 + cooling_demand + (occupancy * 0.15) + np.random.normal(0, 3.0)
+            # Weekday working hours: 08:00 - 18:00 (with realistic day-to-day variance)
+            weekday_occupancy_scale = [120, 148, 155, 142, 126][day_of_week]
+            occupancy = float(np.random.normal(weekday_occupancy_scale, 7))
+            cooling_demand = max(0.0, (temp_c - 23.5) * 4.0)
+            # Midday lunch dip (12:00 - 13:00) and peak afternoon (14:00 - 16:00)
+            hour_factor = 1.12 if 13 <= hour <= 16 else (0.92 if hour in [8, 12, 18] else 1.0)
+            base_load = (78.0 + cooling_demand + (occupancy * 0.16)) * hour_factor + np.random.normal(0, 2.5)
 
         # Controlled anomaly injections
         date_str = dt.strftime("%Y-%m-%d")
         is_anomaly = False
         anomaly_type = None
 
-        # Anomaly 1: HVAC operating after closing (2026-08-10, 19:00 - 23:00)
-        if date_str == "2026-08-10" and 19 <= hour <= 23:
+        # Anomaly 1: Friday night HVAC left running past closing (2026-07-03, 19:00 - 23:00)
+        if date_str == "2026-07-03" and 19 <= hour <= 23:
+            base_load += 68.0  # Cooling chillers left active overnight
+            is_anomaly = True
+            anomaly_type = "HVAC operating after closing"
+
+        # Anomaly 2: Sunday lighting left active overnight (2026-07-05, 01:00 - 06:00)
+        elif date_str == "2026-07-05" and 1 <= hour <= 6:
+            base_load += 24.0  # Floor lighting left on
+            is_anomaly = True
+            anomaly_type = "Lighting operating overnight"
+
+        # Anomaly 3: HVAC operating after closing in August (2026-08-10, 19:00 - 23:00)
+        elif date_str == "2026-08-10" and 19 <= hour <= 23:
             base_load += 65.0  # HVAC chillers left running
             is_anomaly = True
             anomaly_type = "HVAC operating after closing"
 
-        # Anomaly 2: Lighting operating overnight (2026-08-16 Sunday, 01:00 - 06:00)
+        # Anomaly 4: Lighting operating overnight in August (2026-08-16, 01:00 - 06:00)
         elif date_str == "2026-08-16" and 1 <= hour <= 6:
             base_load += 22.0  # Lighting floors left on overnight
             is_anomaly = True
             anomaly_type = "Lighting operating overnight"
 
-        # Anomaly 3: Compressor extended operation (2026-08-24, 12:00 - 17:00)
+        # Anomaly 5: Compressor failure to unload (2026-08-24, 12:00 - 17:00)
         elif date_str == "2026-08-24" and 12 <= hour <= 17:
             base_load += 38.0  # Compressor failure to unload
             is_anomaly = True
