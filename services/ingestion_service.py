@@ -203,6 +203,14 @@ def get_energy_csv_template() -> str:
     )
 
 
+def load_demo_energy_data() -> pd.DataFrame:
+    """Loads the pre-generated simulated office energy demo dataset."""
+    demo_file = Path(__file__).resolve().parent.parent / "data" / "demo" / "demo_office_energy.csv"
+    if not demo_file.exists():
+        raise FileNotFoundError(f"Demo dataset not found at {demo_file}")
+    return load_energy_csv(demo_file)
+
+
 class IngestionService:
     """Service interface for ingesting building and energy data across all three modes."""
 

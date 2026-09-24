@@ -12,45 +12,45 @@
   ],
   "dataset_name": "Test Synthetic Dataset",
   "dataset_manifest": {},
-  "training_date": "2026-09-24T22:27:38.186282",
+  "training_date": "2026-09-24T22:52:10.591836",
   "train_rows": 140,
   "validation_rows": 30,
   "test_rows": 30,
   "metrics": {
     "validation": {
       "baseline_metrics": {
-        "MAE": 11.977,
-        "RMSE": 13.6339,
-        "CV(RMSE)": 28.0,
-        "sMAPE": 24.98,
-        "R2": -0.0172
+        "MAE": 12.0527,
+        "RMSE": 13.7467,
+        "CV(RMSE)": 28.2,
+        "sMAPE": 25.07,
+        "R2": -0.0091
       },
       "ml_metrics": {
-        "MAE": 0.7697,
-        "RMSE": 0.9604,
-        "CV(RMSE)": 1.97,
-        "sMAPE": 1.74,
-        "R2": 0.995
+        "MAE": 0.8581,
+        "RMSE": 1.0896,
+        "CV(RMSE)": 2.24,
+        "sMAPE": 1.91,
+        "R2": 0.9937
       },
-      "improvement_vs_baseline_pct": 93.57,
+      "improvement_vs_baseline_pct": 92.88,
       "ml_outperformed_baseline": true
     },
     "test": {
       "baseline_metrics": {
-        "MAE": 1.2509,
-        "RMSE": 1.502,
-        "CV(RMSE)": 2.83,
-        "sMAPE": 2.71,
-        "R2": 0.9891
+        "MAE": 1.0234,
+        "RMSE": 1.2979,
+        "CV(RMSE)": 2.45,
+        "sMAPE": 2.11,
+        "R2": 0.9918
       },
       "ml_metrics": {
-        "MAE": 0.9093,
-        "RMSE": 1.0714,
-        "CV(RMSE)": 2.02,
+        "MAE": 0.906,
+        "RMSE": 1.147,
+        "CV(RMSE)": 2.16,
         "sMAPE": 1.86,
-        "R2": 0.9945
+        "R2": 0.9936
       },
-      "improvement_vs_baseline_pct": 27.31,
+      "improvement_vs_baseline_pct": 11.47,
       "ml_outperformed_baseline": true
     }
   }

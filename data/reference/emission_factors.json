@@ -1,0 +1,29 @@
+{
+  "default_region": "India_National_Grid",
+  "factors": {
+    "India_National_Grid": {
+      "factor_kg_co2_per_kwh": 0.82,
+      "unit": "kg CO2 / kWh",
+      "source": "Central Electricity Authority (CEA) CO2 Baseline Database for the Indian Power Sector, User Guide Version 19.0 (2024)",
+      "description": "Weighted average grid emission factor for the unified Indian national grid"
+    },
+    "India_Northern_Region": {
+      "factor_kg_co2_per_kwh": 0.85,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "description": "Northern regional grid emission factor"
+    },
+    "India_Western_Region": {
+      "factor_kg_co2_per_kwh": 0.83,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "description": "Western regional grid emission factor"
+    },
+    "India_Southern_Region": {
+      "factor_kg_co2_per_kwh": 0.79,
+      "unit": "kg CO2 / kWh",
+      "source": "CEA Regional Baseline",
+      "description": "Southern regional grid emission factor"
+    }
+  }
+}

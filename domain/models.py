@@ -137,12 +137,21 @@ class AnomalyResult:
     timestamp: Any
     actual_energy_kwh: float
     predicted_energy_kwh: float
-    is_anomaly: bool
+    is_anomaly: bool = False
+    forecast_error_kwh: float = 0.0
+    forecast_error_pct: float = 0.0
+    anomaly_flag: bool = False
     anomaly_score: float = 0.0
     waste_kwh: float = 0.0
     potential_waste_cost_inr: float = 0.0
-    severity: str = "low"
+    severity: str = "normal"
     description: str = ""
+
+    def __post_init__(self):
+        if self.is_anomaly and not self.anomaly_flag:
+            self.anomaly_flag = True
+        elif self.anomaly_flag and not self.is_anomaly:
+            self.is_anomaly = True
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -163,6 +172,9 @@ class OptimizationResult:
     cost_savings_inr: float
     savings_pct: float
     schedule_recommendations: List[Dict[str, Any]] = field(default_factory=list)
+    savings_statement: str = "Projected savings under the modeled operating constraints"
+    is_feasible: bool = True
+    status_message: str = "Feasible schedule found"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -188,7 +200,7 @@ class IncentiveMatch:
 @dataclass
 class ImpactResult:
     """
-    High-level ₹ / kWh / CO2 impact summary including EPI normalization.
+    High-level ₹ / kWh / CO2 impact summary including EPI/MEPI normalization.
     """
     baseline_energy_kwh: float
     optimized_energy_kwh: float
@@ -196,7 +208,27 @@ class ImpactResult:
     cost_savings_inr: float
     co2_reduction_kg: float
     annual_energy_kwh: float
-    epi_kwh_m2_year: float
+    epi_kwh_m2_year: Optional[float] = None
+    monthly_energy_savings: float = 0.0
+    annual_energy_savings: float = 0.0
+    monthly_cost_savings: float = 0.0
+    annual_cost_savings: float = 0.0
+    co2_avoided_kg: float = 0.0
+    co2_factor_used: float = 0.82
+    co2_factor_statement: str = ""
+    mepi_kwh_m2_year: Optional[float] = None
+    measured_epi_status: str = ""
+    annualization_assumptions: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.monthly_energy_savings == 0.0 and self.energy_savings_kwh != 0.0:
+            self.monthly_energy_savings = self.energy_savings_kwh
+        if self.monthly_cost_savings == 0.0 and self.cost_savings_inr != 0.0:
+            self.monthly_cost_savings = self.cost_savings_inr
+        if self.co2_avoided_kg == 0.0 and self.co2_reduction_kg != 0.0:
+            self.co2_avoided_kg = self.co2_reduction_kg
+        if self.mepi_kwh_m2_year is None and self.epi_kwh_m2_year is not None:
+            self.mepi_kwh_m2_year = self.epi_kwh_m2_year
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

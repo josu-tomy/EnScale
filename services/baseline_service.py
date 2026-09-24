@@ -104,7 +104,9 @@ def calculate_equipment_energy(equipment_list: List[Union[Equipment, Dict[str, A
 
     return {
         "per_equipment_energy": per_equipment,
+        "equipment_details": per_equipment,
         "total_energy": round(total_energy, 2),
+        "total_energy_kwh": round(total_energy, 2),
         "assumptions": assumptions,
     }
 
