@@ -1,8 +1,8 @@
 # EnScale Build Status
 
-**STATUS:** COMPLETE (ML-Assisted Energy Decision Loop Engine Fully Verified)  
-**CURRENT_STAGE:** Complete Energy Decision Loop & Hackathon Demonstration Readiness  
-**TEST_SUITE_RESULT:** 78 PASSED / 0 FAILED / 0 SKIPPED (100% Pass Rate in 5.91s)
+**STATUS:** Deterministic energy engine preserved; structured optional AI backend added
+**CURRENT_STAGE:** Backend AI and analysis integration
+**TEST_SUITE_RESULT:** Baseline before implementation: 80 passed. Post-integration result is recorded after final verification below.
 
 ---
 
@@ -85,3 +85,14 @@ Redesigned the entire interface from an engineering-heavy configuration tool int
 - **Command:** `streamlit run app.py`
 - **Port:** Local port 8501/8502/8503 verified responsive and serving cleanly.
 - **Offline / Local-First:** 100% offline, zero external API dependencies, zero hardcoded values, zero secrets.
+
+## 4. Backend AI Integration
+
+- Added a structured AI provider interface for deterministic, Ollama, Gemini (`google-genai`), and OpenAI-compatible endpoints.
+- Provider errors and malformed outputs retry once, then activate deterministic local reasoning. The selected provider is never replaced with a different cloud provider.
+- Added a backend analysis pipeline, structured report/progress contracts, safe health diagnostic, `.env.example`, setup guide, and API-focused tests.
+- Existing `app.py` has not been changed; the Streamlit UI does not yet call the new analysis pipeline.
+- This status file previously cited 78 tests; the audited pre-change repository had 80 passing tests.
+- Final verification: `pytest -q` → **93 passed, 1 warning, 0 failed**. The warning is the existing invalid-timestamp parsing warning in the ingestion test.
+- Demo flow verification: `python scripts/run_demo_headless.py` completed and printed forecast, anomaly, opportunity, optimization, impact, incentive, coverage, and recall results.
+- Current configured provider: `deterministic`; `python scripts/check_ai.py` reports generation test PASS and fallback NOT ACTIVE.

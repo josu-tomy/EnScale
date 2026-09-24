@@ -58,3 +58,13 @@ data/processed/*
 
 # Environment variables
 .env
+.env.*
+!.env.example
+
+# Local model/runtime caches and secrets
+.ollama/
+ollama_models/
+*.gguf
+*.safetensors
+*.pem
+*.key

@@ -72,6 +72,10 @@ EnScale is architected to run **100% locally**. Normal application execution doe
 - **Test Framework**: pytest
 - **Optional Local Persistence**: SQLite (only if local persistence is genuinely required)
 
+### Structured AI interpretation
+
+EnScale's deterministic services remain the source of every numeric result. Optional providers interpret supplied structured findings and fall back to deterministic local reasoning on failure. Select exactly one provider with `AI_PROVIDER=deterministic|ollama|gemini|openai`; cloud providers are never substituted for one another. See [AI_SETUP.md](AI_SETUP.md) and [BACKEND_UI_CONTRACT.md](BACKEND_UI_CONTRACT.md). The backend callable is `services.analysis_service.analyze_energy(...)`; the existing Streamlit UI is not wired to this new contract.
+
 ---
 
 ## Data Modes
@@ -158,5 +162,5 @@ Trained with chronological splitting (70% train / 15% validation / 15% test, zer
 ## Current Stage & Verification
 
 - **Status**: Complete & Verified (ML-Assisted Energy Decision Loop Engine)
-- **Test Suite**: 78 / 78 Passing Tests (`pytest`)
+- **Test Suite**: 93 / 93 Passing Tests (`pytest -q`, including AI integration coverage)
 - **Runnable Entrypoint**: `app.py` (`streamlit run app.py`)
