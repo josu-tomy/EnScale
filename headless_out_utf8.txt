@@ -1,0 +1,172 @@
+============================================================
+1. EXPECTED VS ACTUAL KWH AND TOTAL RESIDUAL
+============================================================
+Total Observed Meter Energy: 89,218.27 kWh (over 1488 hours / 62.0 days)
+Total ML Expected Energy:    89,365.42 kWh
+Total Model Residual:        -147.15 kWh (-0.16%)
+Avoidable Waste Flagged:     555.12 kWh across 32 hours
+
+============================================================
+2. TOP 3 ANOMALIES
+============================================================
+
+Anomaly #1:
+  Equipment / Category: not attributable from meter data
+  Time Period:          Mon, 24 Aug 2026, 12:00 PM – 05:00 PM (6h)
+  Expected Hourly:      156.90 kWh/h
+  Observed Hourly:      191.10 kWh/h
+  Residual / Deviation: +34.20 kWh/h (Total Waste: 205.40 kWh, ₹1,746.00)
+  Anomaly Score:        25.00 sigma (high)
+  Likely Condition:     Midday load spike during operating hours (08:00–18:00). Residual (34.2 kW) exceeds listed equipment rated capacity; category not attributable from meter data without circuit-level submetering.
+  Confidence Basis:     Unattributable from whole-building meter data alone (residual exceeds listed equipment capacity)
+
+Anomaly #2:
+  Equipment / Category: Lighting & Inactive Systems
+  Time Period:          Sun, 16 Aug 2026, 01:00 AM – 06:00 AM (6h)
+  Expected Hourly:      17.40 kWh/h
+  Observed Hourly:      39.40 kWh/h
+  Residual / Deviation: +22.10 kWh/h (Total Waste: 132.40 kWh, ₹1,126.00)
+  Anomaly Score:        14.10 sigma (high)
+  Likely Condition:     Pattern consistent with unscheduled base load or lighting circuits remaining active during non-operating weekend hours.
+  Confidence Basis:     Hypothesis based on non-operating weekend timing and elevated idle baseline
+
+Anomaly #3:
+  Equipment / Category: HVAC / Chillers
+  Time Period:          Fri, 03 Jul 2026, 07:00 PM – 11:00 PM (5h)
+  Expected Hourly:      69.90 kWh/h
+  Observed Hourly:      86.00 kWh/h
+  Residual / Deviation: +16.20 kWh/h (Total Waste: 81.00 kWh, ₹688.00)
+  Anomaly Score:        9.30 sigma (high)
+  Likely Condition:     Pattern consistent with cooling equipment or auxiliary HVAC remaining active past facility closing time of 18:00.
+  Confidence Basis:     Hypothesis based on timing (post-closing) and load magnitude (16.2 kW <= 35.0 kW rated capacity)
+
+============================================================
+3. THE OPPORTUNITY LIST
+============================================================
+
+Opportunity #1: Central Chiller Operational Schedule Retuning [OPP-CHILLER-01]
+  Basis:              SCHEDULE-DERIVED (Headline Verified: True)
+  Category:           HVAC / Climate Control
+  Binding Constraint: Limited by minimum runtime you entered: 7.0 h (runtime reduced from 9.0h to 7.0h); scheduled from facility opening (08:00).
+  Current Condition:  Central Chiller operated 9.0h/day (08:00–17:00).
+  Expected Condition: runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Avoidable Energy:   14,784.0 kWh/yr (1,232.0 kWh/mo)
+  Annual Cost Saving: ₹125,664/yr
+  Annual CO2 Avoided: 12,122.9 kg CO2/yr
+  Intervention:       Retune schedule to 08:00–15:00 (7.0h/day). runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Assumptions Note:   Derived strictly from equipment rated power, utilization, and facility operating window bounds.
+
+Opportunity #2: Water Circulation Pumps Runtime Trimming [OPP-PUMP-02]
+  Basis:              SCHEDULE-DERIVED (Headline Verified: True)
+  Category:           Motors & Pumps
+  Binding Constraint: Limited by minimum runtime you entered: 4.0 h (the largest runtime reduction allowed by your constraints). Under a flat tariff, savings derive entirely from cutting runtime, not time-of-day shifting.
+  Current Condition:  Water Circulation Pumps operates for 6.0h/day (08:00–14:00).
+  Expected Condition: runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Avoidable Energy:   13,464.0 kWh/yr (1,122.0 kWh/mo)
+  Annual Cost Saving: ₹114,444/yr
+  Annual CO2 Avoided: 11,040.5 kg CO2/yr
+  Intervention:       Adjust pump schedule to 08:00–12:00 (4.0h/day). runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Assumptions Note:   Savings derive entirely from cutting runtime to minimum required hours under flat tariff.
+
+Opportunity #3: Air Compressors Duty-Cycle Rationalization [OPP-EQ-COMP-01]
+  Basis:              SCHEDULE-DERIVED (Headline Verified: True)
+  Category:           Compressed Air
+  Binding Constraint: Limited by minimum runtime you entered: 5.0 h (runtime reduced from 8.0h to 5.0h).
+  Current Condition:  Air Compressors operates for 8.0h/day (08:00–16:00).
+  Expected Condition: runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Avoidable Energy:   11,404.8 kWh/yr (950.4 kWh/mo)
+  Annual Cost Saving: ₹96,941/yr
+  Annual CO2 Avoided: 9,351.9 kg CO2/yr
+  Intervention:       Adjust schedule to 08:00–13:00 (5.0h/day). runtime reduced to the minimum you entered; process and comfort impact not modeled — verify on site.
+  Assumptions Note:   Derived strictly from equipment rated power and operational minimum duty cycles.
+
+Opportunity #4: Afternoon Low-Occupancy Cooling Setback [OPP-SETBACK-04]
+  Basis:              RULE-BASED (Headline Verified: False)
+  Category:           HVAC / Thermostat Control
+  Binding Constraint: General engineering rule of thumb (0.45 kWh/m²/month for 1.5°C thermostat setback in composite climate).
+  Current Condition:  Chillers maintain constant minimum supply temperature even during afternoon post-lunch occupancy dips (14:00–16:00).
+  Expected Condition: Cooling setpoint can be raised by 1.5°C during the low-occupancy window without affecting thermal comfort.
+  Avoidable Energy:   13,500.0 kWh/yr (1,125.0 kWh/mo)
+  Annual Cost Saving: ₹114,750/yr
+  Annual CO2 Avoided: 11,070.0 kg CO2/yr
+  Intervention:       Program thermostat setback to increase cooling setpoint from 23.5°C to 25.0°C between 2:00 PM and 4:00 PM.
+  Assumptions Note:   Estimate based on a general engineering assumption (0.45 kWh/m²/month for 1.5°C thermostat adjustment in composite climate) — requires site verification. Formula: net_built_up_area_m2 (2,500 m²) × 0.45 kWh/m²/month × 12 months = 13,500 kWh/year.
+
+Opportunity #5: Investigate Unattributed Midday Load Spikes [OPP-INVESTIGATE-05]
+  Basis:              MODEL-DETECTED (Headline Verified: False)
+  Category:           Investigate — cause cannot be determined from meter data alone
+  Binding Constraint: Requires submetering confirmation. No savings claimed until physical root-cause identification.
+  Current Condition:  Intermittent midday load spikes detected during operating hours (e.g. 2026-07-28, 2026-07-30, 2026-08-13).
+  Expected Condition: Daytime loads should track predicted building operational baseline.
+  Avoidable Energy:   0.0 kWh/yr (0.0 kWh/mo)
+  Annual Cost Saving: ₹0/yr
+  Annual CO2 Avoided: 0.0 kg CO2/yr
+  Intervention:       Install circuit-level submetering or execute portable power logger audit on distribution panels.
+  Source Episodes:    2026-07-28 16:00 (4.3 kWh residual), 2026-07-30 17:00 (4.3 kWh residual), 2026-08-13 15:00 (4.2 kWh residual)
+  Assumptions Note:   Cause cannot be determined from meter data alone. No savings claimed without submetering.
+
+============================================================
+4. CURRENT VS OPTIMIZED SCHEDULE TABLE
+============================================================
+- Equipment: Central Chiller & Air Conditioning (Flexible)
+  Current Schedule:   08:00 - 17:00 (9.0h/day, 5,544.0 kWh/mo)
+  Optimized Schedule: 08:00 - 15:00 (7.0h/day, 4,312.0 kWh/mo)
+  Monthly Savings:    1,232.0 kWh/mo, ₹10,472/mo
+  Binding Constraint: Limited by minimum runtime you entered: 7.0 h (runtime reduced from 9.0h to 7.0h); scheduled from facility opening (08:00).
+- Equipment: Water Circulation Pumps (Flexible)
+  Current Schedule:   08:00 - 14:00 (6.0h/day, 3,366.0 kWh/mo)
+  Optimized Schedule: 08:00 - 12:00 (4.0h/day, 2,244.0 kWh/mo)
+  Monthly Savings:    1,122.0 kWh/mo, ₹9,537/mo
+  Binding Constraint: Limited by minimum runtime you entered: 4.0 h (the largest runtime reduction allowed by your constraints). Under a flat tariff, savings derive entirely from cutting runtime, not time-of-day shifting.
+- Equipment: Workstation & Floor Lighting (Non-Flexible)
+  Current Schedule:   08:00 - 18:00 (10.0h/day, 1,980.0 kWh/mo)
+  Optimized Schedule: 08:00 - 18:00 (10.0h/day, 1,980.0 kWh/mo)
+  Monthly Savings:    0.0 kWh/mo, ₹0/mo
+  Binding Constraint: Non-flexible equipment constraint (runtime cannot be altered)
+- Equipment: Air Compressors (Flexible)
+  Current Schedule:   08:00 - 16:00 (8.0h/day, 2,534.4 kWh/mo)
+  Optimized Schedule: 08:00 - 13:00 (5.0h/day, 1,584.0 kWh/mo)
+  Monthly Savings:    950.4 kWh/mo, ₹8,078/mo
+  Binding Constraint: Limited by minimum runtime you entered: 5.0 h (runtime reduced from 8.0h to 5.0h).
+
+============================================================
+5. ANNUAL RECONCILED IMPACT & TOTALS
+============================================================
+Annual Energy Saved:   39,652.8 kWh / yr
+Annual Money Saved:    ₹ 337,049 / yr (₹ 3.37 Lakh/yr)
+Annual CO2 Avoided:    32,515.3 kg CO2 / yr (32.52 tonnes CO2/yr)
+Tariff Used:           ₹ 8.50 / kWh
+Emission Factor Used:  0.82 kg CO2/kWh (CO₂ factor used: 0.82 kg CO₂/kWh (Source: Central Electricity Authority CO2 Baseline Database (version and year to be confirmed by the user)))
+
+============================================================
+6. POLICY / INCENTIVE MATCHES
+============================================================
+
+Match #1: BEE Standards & Labeling Star-Rated Equipment Program (INC-BEE-SL-01) [UNVERIFIED — CHECK AGAINST THE OFFICIAL SOURCE BEFORE RELYING]
+  Target Equipment: HVAC, Chiller Systems, VRF, LED Lighting, Distribution Transformers
+  Eligibility:      Facility procuring or retrofitting with BEE 4-Star or 5-Star certified equipment complying with Energy Conservation Building Code (ECBC) standards.
+  Policy Ref:       Bureau of Energy Efficiency (BEE) Official S&L Guidelines & ECBC 2017 Framework
+  Why Matched:      Geographic alignment: Pan-India national scheme available in all states. | Sector alignment: Matches commercial facility profile ('Commercial Office'). | Technology match: Facility operates equipment aligned with HVAC / Chiller high-efficiency cooling technology, LED lighting and commercial illumination controls.
+  Verification:     Potential incentive match. Verify eligibility before application. EnScale provides modeled estimations and is not an official government or utility eligibility authority.
+
+Match #2: EESL Super-Efficient Chiller and Air Conditioning Program (INC-EESL-SEAC-03) [UNVERIFIED — CHECK AGAINST THE OFFICIAL SOURCE BEFORE RELYING]
+  Target Equipment: Magnetic Bearing Chillers, Inverter AC, VRF Systems with ISEER >= 5.4
+  Eligibility:      Replacement of low-efficiency or aging chillers/split units (> 7 years in operation) with ultra-high efficiency aggregated equipment.
+  Policy Ref:       EESL National Energy Efficiency Program Guidelines
+  Why Matched:      Geographic alignment: Pan-India national scheme available in all states. | Sector alignment: Matches commercial facility profile ('Commercial Office'). | Technology match: Facility operates equipment aligned with HVAC / Chiller high-efficiency cooling technology.
+  Verification:     Potential incentive match. Verify eligibility before application. EnScale provides modeled estimations and is not an official government or utility eligibility authority.
+
+Match #3: Maharashtra Time-of-Day (ToD) Off-Peak Energy Tariff Incentive (INC-MAHA-DSM-04) [UNVERIFIED — CHECK AGAINST THE OFFICIAL SOURCE BEFORE RELYING]
+  Target Equipment: Flexible Pump Scheduling, Chiller Pre-cooling, Load Shifting
+  Eligibility:      Shifting flexible operational equipment load to night off-peak window (22:00 to 06:00 hrs) with verified interval metering.
+  Policy Ref:       MERC Multi-Year Tariff Order & MSEDCL DSM Regulations
+  Why Matched:      Geographic alignment: State-specific policy for Maharashtra. | Sector alignment: Matches commercial facility profile ('Commercial Office'). | Technology match: Facility operates equipment aligned with HVAC / Chiller high-efficiency cooling technology, Flexible equipment runtime available for off-peak load shifting.
+  Verification:     Potential incentive match. Verify eligibility before application. EnScale provides modeled estimations and is not an official government or utility eligibility authority.
+
+============================================================
+7. COVERAGE AND INJECTED RECALL
+============================================================
+Equipment Coverage: 31.1% of metered consumption (27,725.1 kWh / 89,218.3 kWh)
+Unmodeled Load:     68.9% (61,493.2 kWh)
+Injected Recall:    5/5 episodes detected (100.0%)
+Injected Hours:     23/28 hours flagged (82.1%)

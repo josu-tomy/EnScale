@@ -150,3 +150,69 @@ class BaselineService:
             "equipment_breakdown": calc["per_equipment_energy"],
             "assumptions": calc["assumptions"],
         }
+
+    def compute_coverage(
+        self,
+        equipment_energy_monthly_kwh: float,
+        metered_df: pd.DataFrame,
+    ) -> Dict[str, Any]:
+        """
+        Computes equipment coverage percentage against metered data.
+        """
+        return calculate_equipment_coverage(equipment_energy_monthly_kwh, metered_df)
+
+
+def calculate_equipment_coverage(
+    equipment_energy_monthly_kwh: float,
+    metered_df: pd.DataFrame,
+) -> Dict[str, Any]:
+    """
+    Computes modeled equipment coverage vs total metered consumption over the observation period.
+    Quantifies the modeled equipment baseline against actual metered energy.
+
+    FIX 5:
+    The equipment inventory accounts for X% of total metered consumption.
+    The remaining Y% represents unmodeled loads (lighting, small power, plug loads, uninventoried equipment).
+    """
+    total_metered_kwh = float(metered_df["energy_kwh"].sum()) if not metered_df.empty else 0.0
+
+    if metered_df.empty or total_metered_kwh <= 0:
+        return {
+            "total_metered_kwh": 0.0,
+            "modeled_equipment_period_kwh": 0.0,
+            "coverage_pct": 0.0,
+            "unmodeled_pct": 100.0,
+            "unmodeled_kwh": 0.0,
+            "observation_days": 0.0,
+            "explanation": "No metered data available to compute equipment coverage.",
+        }
+
+    # Determine duration of metered dataset
+    if "timestamp" in metered_df.columns:
+        ts = pd.to_datetime(metered_df["timestamp"])
+        span_seconds = (ts.max() - ts.min()).total_seconds()
+        days = max(1.0, span_seconds / 86400.0)
+    else:
+        days = max(1.0, len(metered_df) / 24.0)
+
+    # Scale monthly equipment energy to the period duration
+    equipment_period_kwh = equipment_energy_monthly_kwh * (days / 30.0)
+    coverage_pct = min(100.0, (equipment_period_kwh / total_metered_kwh) * 100.0)
+    unmodeled_pct = max(0.0, 100.0 - coverage_pct)
+    unmodeled_kwh = max(0.0, total_metered_kwh - equipment_period_kwh)
+
+    explanation = (
+        f"The equipment inventory accounts for {coverage_pct:.1f}% of total metered consumption. "
+        f"The remaining {unmodeled_pct:.1f}% represents unmodeled loads (ambient lighting, small power, "
+        f"plug loads, IT servers, and uninventoried auxiliary equipment)."
+    )
+
+    return {
+        "total_metered_kwh": round(total_metered_kwh, 1),
+        "modeled_equipment_period_kwh": round(equipment_period_kwh, 1),
+        "coverage_pct": round(coverage_pct, 1),
+        "unmodeled_pct": round(unmodeled_pct, 1),
+        "unmodeled_kwh": round(unmodeled_kwh, 1),
+        "observation_days": round(days, 1),
+        "explanation": explanation,
+    }

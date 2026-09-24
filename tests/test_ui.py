@@ -102,3 +102,38 @@ def test_ui_backward_navigation():
     at.run(timeout=10)
     assert "Tell us about your building" in at.title[0].value
     assert not at.exception
+
+
+def test_ui_wording_and_layout_checks():
+    """
+    Asserts wording rules and UI layout safeguards:
+    - Data screen uses 'Evaluation dataset performance'.
+    - Schedule-derived items use 'Estimated' or 'Schedule-derived', never 'Verified' or 'detected'.
+    - Improve screen displays 'Listed equipment only' and visible text contrast styling.
+    - Decision summary uses CSS grid with min-width: 0 and word-break to avoid overlap.
+    """
+    app_path = Path(__file__).resolve().parent.parent / "app.py"
+    with open(app_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # 1. Data screen caption
+    assert "Evaluation dataset performance" in content
+    assert "Benchmark accuracy of" not in content
+
+    # 2. Schedule-derived items wording
+    assert "Prioritized Operational Interventions (Schedule-Derived Savings)" in content
+    assert "Prioritized Operational Interventions (Verified Headline Savings)" not in content
+    assert "Current Operating Baseline:" in content
+    assert "Estimated Annual Impact (Schedule-Derived):" in content
+    assert "Verified Annual Impact:" not in content
+    assert "Schedule-Derived Opportunities" in content
+
+    # 3. Improve screen coverage label & visible text contrast
+    assert "Listed equipment only (" in content
+    assert "% of metered load)" in content
+    assert "color: #0f172a;" in content
+
+    # 4. Decision summary layout overlap safeguards
+    assert "min-width: 0;" in content
+    assert "word-break: break-word;" in content
+    assert "box-sizing: border-box;" in content

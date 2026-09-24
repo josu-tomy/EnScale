@@ -1,8 +1,8 @@
 # EnScale Build Status
 
-**STATUS:** COMPLETE (Consumer SaaS UI/UX Redesign Fully Verified)  
-**CURRENT_STAGE:** UI/UX Redesign & Demonstration Readiness  
-**TEST_SUITE_RESULT:** 64 PASSED / 0 FAILED / 0 SKIPPED (100% Pass Rate in 3.29s)
+**STATUS:** COMPLETE (ML-Assisted Energy Decision Loop Engine Fully Verified)  
+**CURRENT_STAGE:** Complete Energy Decision Loop & Hackathon Demonstration Readiness  
+**TEST_SUITE_RESULT:** 78 PASSED / 0 FAILED / 0 SKIPPED (100% Pass Rate in 5.91s)
 
 ---
 
@@ -30,43 +30,35 @@ Redesigned the entire interface from an engineering-heavy configuration tool int
    - Sample data highlighted prominently: *"Don't have a file? Try EnScale with a realistic sample."*
    - Example preview table displayed before and after selection showing `Date & Time` and `Energy Used (kWh)`.
    - Plain-language validation status (`✓ Clean hourly readings ready for analysis`).
+   - Grounded evaluation metrics displayed from `evaluation.json`: Test $R^2 = 0.9832$, Test $\text{MAE} = 3.63\text{ kWh}$, $\text{CV(RMSE)} = 12.89\%$, 298 test samples.
 
 4. **Screen 3 — UNDERSTAND ("Here's what your energy is doing"):**
    - Removed all references to machine learning model names and technical regression jargon.
-   - Three bold, restrained summary metrics:
-     - Typical Operating Load (e.g. `118 – 142 kWh/h`)
-     - Expected Daily Usage (e.g. `1,310 kWh / day`)
-     - Unusual Spikes Detected (e.g. `3 periods`)
-   - **Fixed Forecast & Usage Graph:**
-     - High-contrast Plotly line chart showing Actual Energy (solid blue) vs Expected Normal Pattern (dashed amber).
-     - Distinct daily cycle (night low, daytime peaks, Saturday partial hours, Sunday low).
-     - Prominent week-1 Friday night after-hours cooling spike annotation (`📌 After-hours spike: 86.1 kWh vs 18.0 kWh expected`).
-   - **"EnScale's Takeaway":** Concise 3-bullet AI-style natural language interpretation explaining the daily rhythm, where consumption diverged, and what it means for cost reduction.
+   - Transparent expected vs actual vs residual display: Total Actual (`89,218 kWh`), Total Expected (`89,365 kWh`), Net Residual (`-147 kWh / -0.16%`), and separately Flagged Excess (`32 hours, 555 kWh`).
+   - Honest takeaway: When net residual is within $\pm 1\%$, clearly states *"Overall consumption matches the model; the following hours deviate from expected."*
+   - High-contrast Plotly line chart showing Actual Energy (solid blue) vs Expected Normal Pattern (dashed amber) with weekend dips and after-hours anomaly annotations.
 
 5. **Screen 4 — IMPROVE ("Where can you save?"):**
    - Unified waste detection, optimization, and financial impact into a single, intuitive screen.
    - Highlights the Main Opportunity and Recommended Operational Change.
-   - Simple 5-second BEFORE vs. AFTER comparison:
-     - CURRENT: `10,890 kWh / month` (`₹ 92,565 / month`)
-     - RECOMMENDED: `8,536 kWh / month` (`₹ 72,556 / month`)
-     - MODELED REDUCTION: `2,354 kWh / month` (`₹ 20,009 / month`, `21.6% savings`)
-   - Annual impact summary: `₹ 2.40 Lakh / year`, `28,248 kWh / year`, `~23.1 tonnes CO₂ / year`.
-   - Top matched government & utility incentive previews with strict compliance terminology.
+   - 5-second BEFORE vs. AFTER comparison:
+     - CURRENT: `13,424 kWh / month` (`₹ 114,107 / month`)
+     - RECOMMENDED: `10,120 kWh / month` (`₹ 86,020 / month`)
+     - MODELED REDUCTION: `3,304 kWh / month` (`₹ 28,087 / month`, `24.6% savings`)
+   - Editable grid emission factor input (default 0.82 kg CO₂/kWh, labeled unverified) dynamically recalculating avoided CO₂ emissions.
+   - Clear start-time change warnings: *"Comfort and process impact not modeled — verify on site."*
 
 6. **Screen 5 — ACTION PLAN ("Your Energy Action Plan"):**
-   - 3 specific, prioritized recommendation cards with:
-     1. *What we found*
-     2. *What to do*
-     3. *Expected impact* (kWh/month and ₹/month)
+   - EnScale Executive Decision Summary at the top with strict reconciliation to headline verified savings.
+   - Clear distinction between model-flagged past excess (`555 kWh in 32 anomalous hours`) and schedule-derived potential future savings (`39,653 kWh/year`).
+   - Unverified badges next to all policy matches and emission factors.
    - High-efficiency equipment upgrade card with modeled payback estimation (~3.8 to 4.5 years).
-   - Matched incentive cards with clear disclaimers (*"Potential incentive match — Verify eligibility before applying."*).
-   - "Why this matters" plain-language impact statement.
-   - `[ 📥 Download Action Plan ]` button exporting a clean, formatted action plan summary.
-   - Collapsed `⚙️ Technical details (for engineers and auditors)` section at the very bottom containing model architecture (`HistGradientBoostingRegressor`), real accuracy metrics (`MAE: 3.47 kWh`, `R²: 0.9838`), and CEA emissions references.
+   - Downloadable formatted action plan summary (`.txt`).
+   - Collapsed technical appendix citing model architecture (`HistGradientBoostingRegressor`), real accuracy metrics (`Test MAE: 3.63 kWh`, `Test R²: 0.9832`, `CV(RMSE): 12.89%`, 298 test samples), and CEA emissions references.
 
 7. **Realistic Demo Dataset & ML Retraining:**
-   - Updated `scripts/setup_data.py` with multi-day weather oscillations, weekday occupancy variances, and controlled week-1 anomalies.
-   - Retrained `HistGradientBoostingRegressor` (`Test MAE: 3.47 kWh`, `Test R²: 0.9838`).
+   - 62 days (1,488 hourly interval readings) generated with deterministic diurnal curves and temperature-sensitivity formulas.
+   - Trained `HistGradientBoostingRegressor` (`Test MAE: 3.63 kWh`, `Test R²: 0.9832`, 298 test samples).
 
 ---
 
@@ -82,8 +74,9 @@ Redesigned the entire interface from an engineering-heavy configuration tool int
 | `tests/test_optimizer.py` | Constraint matrix (Tests 1–5), zero constraint violations, strict savings contract. | **PASS** (6/6) |
 | `tests/test_impact.py` | Cost & energy savings, CEA CO₂ emissions factor (0.82 kg/kWh), MEPI / measured EPI. | **PASS** (7/7) |
 | `tests/test_incentives.py` | 8 curated Indian schemes, geography/technology matching, terminology safeguards, payback. | **PASS** (9/9) |
+| `tests/test_opportunity_and_decision_loop.py` | Energy opportunities, explainable episodes, decision summary, human verification contract, proportional CO2, needed_from_opening constraint, net residual language, and manifest independence. | **PASS** (14/14) |
 | `tests/test_end_to_end.py` | Complete end-to-end chains across demo, user data, and equipment baseline modes. | **PASS** (9/9) |
-| **TOTAL** | **Comprehensive Full Regression Suite** | **64 / 64 PASS** |
+| **TOTAL** | **Comprehensive Full Regression Suite** | **78 / 78 PASS** |
 
 ---
 

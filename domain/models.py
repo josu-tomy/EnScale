@@ -65,6 +65,8 @@ class Equipment:
     minimum_hours: float
     maximum_hours: float
     is_flexible: bool
+    needed_until_closing: bool = False
+    needed_from_opening: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -83,6 +85,8 @@ class Equipment:
             minimum_hours=float(data["minimum_hours"]),
             maximum_hours=float(data["maximum_hours"]),
             is_flexible=bool(data["is_flexible"]),
+            needed_until_closing=bool(data.get("needed_until_closing", False)),
+            needed_from_opening=bool(data.get("needed_from_opening", False)),
         )
 
 
@@ -232,3 +236,39 @@ class ImpactResult:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class EnergyOpportunity:
+    """
+    Identified operational condition where consumption exceeds expected level
+    and where a feasible operational intervention can reduce consumption.
+    """
+    opportunity_id: str
+    opportunity_name: str
+    category: str
+    current_condition: str
+    expected_condition: str
+    time_period: str
+    occurrences_count: int
+    observed_energy_kwh: float
+    expected_energy_kwh: float
+    residual_kwh: float
+    estimated_avoidable_energy_kwh: float
+    annual_avoidable_energy_kwh: float
+    estimated_annual_cost_savings_inr: float
+    estimated_annual_co2_impact_kg: float
+    possible_intervention: str
+    constraints: List[str] = field(default_factory=list)
+    confidence_basis: str = "Model Residual + Schedule Correlation"
+    severity: str = "medium"
+    basis: str = "SCHEDULE-DERIVED"  # "SCHEDULE-DERIVED", "MODEL-DETECTED", "RULE-BASED"
+    binding_constraint: str = ""
+    source_episodes: List[str] = field(default_factory=list)
+    assumptions_note: str = ""
+    is_headline_verified: bool = True
+    equipment_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+

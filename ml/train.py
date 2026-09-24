@@ -48,6 +48,7 @@ def train_and_evaluate(
     dataset_manifest: Optional[Dict[str, Any]] = None,
     target_col: str = "energy_kwh",
     model_type: str = "HistGradientBoostingRegressor",
+    artifact_dir: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """
     Executes full ML training pipeline:
@@ -116,9 +117,10 @@ def train_and_evaluate(
     test_comparison = compare_models(base_test_metrics, ml_test_metrics)
 
     # Save artifacts
-    ML_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    target_dir = Path(artifact_dir) if artifact_dir is not None else ML_ARTIFACTS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = ML_ARTIFACTS_DIR / "model.joblib"
+    model_path = target_dir / "model.joblib"
     joblib.dump({
         "model": model,
         "feature_names": feature_cols,
@@ -130,7 +132,7 @@ def train_and_evaluate(
         "model": model,
         "feature_names": feature_cols,
         "model_type": model_type,
-    }, ML_ARTIFACTS_DIR / "energy_forecast_model.joblib")
+    }, target_dir / "energy_forecast_model.joblib")
 
     metadata = {
         "model_type": model_type,
@@ -147,7 +149,7 @@ def train_and_evaluate(
         },
     }
 
-    metadata_path = ML_ARTIFACTS_DIR / "metadata.json"
+    metadata_path = target_dir / "metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
@@ -159,7 +161,7 @@ def train_and_evaluate(
         "acceptance_criteria_met": bool(val_comparison["ml_outperformed_baseline"]),
     }
 
-    evaluation_path = ML_ARTIFACTS_DIR / "evaluation.json"
+    evaluation_path = target_dir / "evaluation.json"
     with open(evaluation_path, "w") as f:
         json.dump(eval_summary, f, indent=2)
 

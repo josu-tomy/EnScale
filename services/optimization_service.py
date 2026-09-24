@@ -21,7 +21,7 @@ from typing import List, Dict, Any, Optional, Union
 import numpy as np
 
 from domain.models import BuildingProfile, Equipment, OptimizationResult
-from config.constants import DEFAULT_TARIFF_INR_PER_KWH
+from config.constants import DEFAULT_TARIFF_INR_PER_KWH, DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH
 
 
 class InfeasibleConstraintError(ValueError):
@@ -75,6 +75,7 @@ def optimize_equipment_schedule(
     tariff_inr_per_kwh: Optional[float] = None,
     step_hours: float = 0.5,
     raise_on_infeasible: bool = True,
+    emission_factor_kg_per_kwh: float = DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH,
 ) -> OptimizationResult:
     """
     Performs deterministic constrained schedule optimization across equipment assets.
@@ -191,10 +192,16 @@ def optimize_equipment_schedule(
                 "equipment_id": eq.equipment_id,
                 "equipment_name": eq.equipment_name,
                 "is_flexible": False,
+                "needed_until_closing": bool(getattr(eq, "needed_until_closing", False)),
+                "binding_constraint": "Non-flexible equipment constraint (runtime cannot be altered)",
                 "baseline_hours_per_day": base_h,
                 "optimized_hours_per_day": opt_h,
                 "hours_per_day": opt_h,
                 "original_hours_per_day": base_h,
+                "current_start_time": f"{op_start:02d}:00",
+                "current_stop_time": f"{min(24, int(op_start + base_h)):02d}:00",
+                "optimized_start_time": f"{op_start:02d}:00",
+                "optimized_stop_time": f"{min(24, int(op_start + opt_h)):02d}:00",
                 "operating_start": op_start,
                 "operating_end": op_end,
                 "minimum_hours": min_h,
@@ -205,6 +212,9 @@ def optimize_equipment_schedule(
                 "cost_inr": round(opt_kwh * tariff, 2),
                 "modeled_energy_savings_kwh": 0.0,
                 "modeled_cost_savings_inr": 0.0,
+                "annual_energy_savings_kwh": 0.0,
+                "annual_cost_savings_inr": 0.0,
+                "annual_co2_savings_kg": 0.0,
                 "status": "Non-flexible equipment unchanged",
             })
             total_optimized_kwh += opt_kwh
@@ -271,14 +281,86 @@ def optimize_equipment_schedule(
         savings_kwh = base_kwh - opt_kwh
         savings_inr = base_cost - opt_cost
 
+        needed_from_opening = bool(getattr(eq, "needed_from_opening", False))
+        needed_until_closing = bool(getattr(eq, "needed_until_closing", False))
+        is_pump = any(k in eq.equipment_type.lower() or k in eq.equipment_name.lower() for k in ["pump", "water"])
+        is_chiller = any(k in eq.equipment_type.lower() or k in eq.equipment_name.lower() for k in ["chiller", "hvac", "cooling"])
+
+        curr_start = f"{op_start:02d}:00"
+        curr_stop = f"{min(24, int(op_start + base_h)):02d}:00"
+
+        if needed_from_opening and needed_until_closing:
+            opt_start_hr = op_start
+            opt_stop_hr = op_end
+            opt_h = float(op_end - op_start)
+            opt_start_str = f"{opt_start_hr:02d}:00"
+            opt_stop_str = f"{opt_stop_hr:02d}:00"
+            binding_constraint = (
+                f"Constrained to run from opening ({op_start:02d}:00) until closing ({op_end:02d}:00). "
+                f"Total runtime fixed to operational window ({opt_h:.1f}h)."
+            )
+            status_desc = f"Scheduled from {opt_start_str} to {opt_stop_str} ({opt_h:.1f}h)."
+        elif needed_from_opening:
+            # Cannot start later than operating_start (FIX 4)
+            opt_start_hr = op_start
+            opt_stop_hr = min(24, int(op_start + opt_h))
+            opt_start_str = f"{opt_start_hr:02d}:00"
+            opt_stop_str = f"{opt_stop_hr:02d}:00"
+            binding_constraint = (
+                f"Limited by minimum runtime you entered: {min_h:.1f} h (runtime reduced from {base_h:.1f}h to {opt_h:.1f}h); "
+                f"scheduled from facility opening ({op_start:02d}:00)."
+            )
+            status_desc = f"Scheduled from {opt_start_str} to {opt_stop_str} ({opt_h:.1f}h), running from facility opening."
+        elif needed_until_closing:
+            # Cannot stop before operating_end (FIX 2)
+            opt_stop_hr = op_end
+            opt_start_hr = max(op_start, int(op_end - opt_h))
+            opt_start_str = f"{opt_start_hr:02d}:00"
+            opt_stop_str = f"{opt_stop_hr:02d}:00"
+            binding_constraint = (
+                f"Limited by minimum runtime ({min_h:.1f}h); constrained to maintain operation "
+                f"until facility closing ({op_end:02d}:00)."
+            )
+            status_desc = f"Rescheduled to {opt_start_str}–{opt_stop_str} ({opt_h:.1f}h), maintaining operation until closing."
+        elif is_pump:
+            # Under flat tariff: savings derive entirely from cutting runtime, not time-of-day shifting (FIX 2)
+            opt_start_str = f"{op_start:02d}:00"
+            opt_stop_str = f"{min(24, int(op_start + opt_h)):02d}:00"
+            binding_constraint = (
+                f"Limited by minimum runtime you entered: {min_h:.1f} h (the largest runtime reduction allowed by your constraints). "
+                "Under a flat tariff, savings derive entirely from cutting runtime, not time-of-day shifting."
+            )
+            status_desc = f"Runtime reduced from {base_h:.1f}h to {opt_h:.1f}h. Under a flat tariff, all savings come from runtime reduction."
+        else:
+            opt_start_str = f"{op_start:02d}:00"
+            opt_stop_hr = min(24, int(op_start + opt_h))
+            opt_stop_str = f"{opt_stop_hr:02d}:00"
+            binding_constraint = (
+                f"Limited by minimum runtime you entered: {min_h:.1f} h (runtime reduced from {base_h:.1f}h to {opt_h:.1f}h)."
+            )
+            status_desc = f"Runtime reduced from {base_h:.1f}h to {opt_h:.1f}h (min required: {min_h:.1f}h)."
+
+        # Warning when schedule start time changes (FIX 4)
+        start_time_changed = (opt_start_str != curr_start)
+        start_time_warning = "Comfort and process impact not modeled — verify on site." if start_time_changed else ""
+
         recommendations.append({
             "equipment_id": eq.equipment_id,
             "equipment_name": eq.equipment_name,
             "is_flexible": True,
+            "needed_from_opening": needed_from_opening,
+            "needed_until_closing": needed_until_closing,
+            "start_time_changed": start_time_changed,
+            "start_time_warning": start_time_warning,
+            "binding_constraint": binding_constraint,
             "baseline_hours_per_day": base_h,
             "optimized_hours_per_day": opt_h,
             "hours_per_day": opt_h,
             "original_hours_per_day": base_h,
+            "current_start_time": curr_start,
+            "current_stop_time": curr_stop,
+            "optimized_start_time": opt_start_str,
+            "optimized_stop_time": opt_stop_str,
             "operating_start": op_start,
             "operating_end": op_end,
             "minimum_hours": min_h,
@@ -289,11 +371,10 @@ def optimize_equipment_schedule(
             "cost_inr": round(opt_cost, 2),
             "modeled_energy_savings_kwh": round(savings_kwh, 2),
             "modeled_cost_savings_inr": round(savings_inr, 2),
-            "status": (
-                f"Rescheduled daily runtime from {base_h}h to {opt_h}h (min required: {min_h}h)"
-                if savings_kwh > 0
-                else "Operated at optimal minimum feasible runtime"
-            ),
+            "annual_energy_savings_kwh": round(savings_kwh * 12.0, 1),
+            "annual_cost_savings_inr": round(savings_inr * 12.0, 0),
+            "annual_co2_savings_kg": round(savings_kwh * 12.0 * emission_factor_kg_per_kwh, 1),
+            "status": status_desc if savings_kwh > 0 else "Operated at optimal minimum feasible runtime",
         })
         total_optimized_kwh += opt_kwh
 

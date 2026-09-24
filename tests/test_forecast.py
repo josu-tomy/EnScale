@@ -125,9 +125,10 @@ def test_metric_calculations():
     assert comp["ml_outperformed_baseline"] is True
 
 
-def test_model_training_and_artifacts():
+def test_model_training_and_artifacts(tmp_path):
     """
     Verifies end-to-end training, saving of artifacts, and metadata.json structure.
+    Uses tmp_path to prevent overwriting canonical production model artifacts.
     """
     date_range = pd.date_range("2026-08-01", periods=200, freq="h")
     df = pd.DataFrame({
@@ -136,13 +137,13 @@ def test_model_training_and_artifacts():
         "temperature_c": 25.0 + 5.0 * np.sin(date_range.hour * np.pi / 12),
     })
 
-    metadata = train_and_evaluate(df, dataset_name="Test Synthetic Dataset")
+    metadata = train_and_evaluate(df, dataset_name="Test Synthetic Dataset", artifact_dir=tmp_path)
     assert metadata["train_rows"] == 140
     assert metadata["validation_rows"] == 30
     assert metadata["test_rows"] == 30
-    assert (ML_ARTIFACTS_DIR / "model.joblib").exists()
-    assert (ML_ARTIFACTS_DIR / "metadata.json").exists()
-    assert (ML_ARTIFACTS_DIR / "evaluation.json").exists()
+    assert (tmp_path / "model.joblib").exists()
+    assert (tmp_path / "metadata.json").exists()
+    assert (tmp_path / "evaluation.json").exists()
 
 
 def test_energy_predictor_prediction_output():
