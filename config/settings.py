@@ -1,0 +1,62 @@
+"""
+Application settings and filesystem path configurations for EnScale.
+"""
+
+from pathlib import Path
+from typing import Dict, Any
+
+from config.constants import (
+    APP_NAME,
+    APP_TAGLINE,
+    APP_VERSION,
+    DEFAULT_TARIFF_INR_PER_KWH,
+    DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH,
+)
+
+# Project Root Directory
+BASE_DIR: Path = Path(__file__).resolve().parent.parent
+
+# Data Directories
+DATA_DIR: Path = BASE_DIR / "data"
+RAW_DATA_DIR: Path = DATA_DIR / "raw"
+PROCESSED_DATA_DIR: Path = DATA_DIR / "processed"
+DEMO_DATA_DIR: Path = DATA_DIR / "demo"
+REFERENCE_DATA_DIR: Path = DATA_DIR / "reference"
+USER_DATA_DIR: Path = DATA_DIR / "user"
+
+# Machine Learning Artifacts Directory
+ML_ARTIFACTS_DIR: Path = BASE_DIR / "ml" / "artifacts"
+
+
+class Settings:
+    """Central settings for local execution."""
+
+    app_name: str = APP_NAME
+    app_tagline: str = APP_TAGLINE
+    app_version: str = APP_VERSION
+
+    default_tariff_inr_per_kwh: float = DEFAULT_TARIFF_INR_PER_KWH
+    default_emission_factor_kg_per_kwh: float = DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH
+
+    base_dir: Path = BASE_DIR
+    data_dir: Path = DATA_DIR
+    raw_data_dir: Path = RAW_DATA_DIR
+    processed_data_dir: Path = PROCESSED_DATA_DIR
+    demo_data_dir: Path = DEMO_DATA_DIR
+    reference_data_dir: Path = REFERENCE_DATA_DIR
+    user_data_dir: Path = USER_DATA_DIR
+    ml_artifacts_dir: Path = ML_ARTIFACTS_DIR
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "app_name": self.app_name,
+            "app_tagline": self.app_tagline,
+            "app_version": self.app_version,
+            "default_tariff_inr_per_kwh": self.default_tariff_inr_per_kwh,
+            "default_emission_factor_kg_per_kwh": self.default_emission_factor_kg_per_kwh,
+            "base_dir": str(self.base_dir),
+            "data_dir": str(self.data_dir),
+        }
+
+
+settings = Settings()
