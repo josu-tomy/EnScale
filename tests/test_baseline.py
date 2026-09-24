@@ -8,6 +8,7 @@ import pandas as pd
 from domain.models import Equipment
 from services.baseline_service import (
     calculate_equipment_energy_kwh,
+    calculate_equipment_energy,
     calculate_epi,
     BaselineService,
 )
@@ -34,6 +35,46 @@ def test_equipment_energy_formula():
     )
     assert actual == expected
     assert actual == 20000.0
+
+
+def test_calculate_equipment_energy_traceability():
+    """
+    Verifies calculate_equipment_energy returns per-equipment energy, total energy,
+    and traceable formula assumptions.
+    """
+    eq1 = {
+        "equipment_id": "EQ-01",
+        "equipment_type": "HVAC",
+        "equipment_name": "Chiller 1",
+        "rated_power_kw": 40.0,
+        "quantity": 1,
+        "hours_per_day": 10.0,
+        "operating_days": 20,
+        "utilization_factor": 0.8,
+    }
+    eq2 = Equipment(
+        equipment_id="EQ-02",
+        equipment_type="Lighting",
+        equipment_name="LED Arrays",
+        rated_power_kw=10.0,
+        quantity=1,
+        hours_per_day=12.0,
+        operating_days=20,
+        utilization_factor=1.0,
+        minimum_hours=8.0,
+        maximum_hours=12.0,
+        is_flexible=False,
+    )
+
+    res = calculate_equipment_energy([eq1, eq2])
+    # eq1: 40 * 1 * 10 * 20 * 0.8 = 6400 kWh
+    # eq2: 10 * 1 * 12 * 20 * 1.0 = 2400 kWh
+    assert res["total_energy"] == 8800.0
+    assert len(res["per_equipment_energy"]) == 2
+    assert "calculation_trace" in res["per_equipment_energy"][0]
+    assert "40.0 kW * 1 unit(s) * 10.0 hrs/day" in res["per_equipment_energy"][0]["calculation_trace"]
+    assert "formula" in res["assumptions"]
+    assert "traceability" in res["assumptions"]
 
 
 def test_epi_calculation():

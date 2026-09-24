@@ -10,7 +10,7 @@ Enforces:
    (EPI is a normalized metric; area does not determine electricity consumption by itself)
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import pandas as pd
 
 from domain.models import Equipment, BuildingProfile
@@ -28,6 +28,85 @@ def calculate_equipment_energy_kwh(
     estimated_energy_kwh = rated_power_kw * quantity * hours_per_day * operating_days * utilization_factor
     """
     return float(rated_power_kw * quantity * hours_per_day * operating_days * utilization_factor)
+
+
+def calculate_equipment_energy(equipment_list: List[Union[Equipment, Dict[str, Any]]]) -> Dict[str, Any]:
+    """
+    Computes equipment baseline according to canonical formula:
+    estimated_energy_kwh = rated_power_kw * quantity * hours_per_day * operating_days * utilization_factor
+
+    Returns:
+    - per_equipment_energy: list of individual equipment calculations with full calculation trace
+    - total_energy: total aggregated energy consumption across all equipment (kWh)
+    - assumptions: documented mathematical model and traceability details
+    """
+    per_equipment: List[Dict[str, Any]] = []
+    total_energy: float = 0.0
+
+    for item in equipment_list:
+        if isinstance(item, Equipment):
+            eq_id = item.equipment_id
+            eq_name = item.equipment_name
+            eq_type = item.equipment_type
+            rated_power = item.rated_power_kw
+            qty = item.quantity
+            hpd = item.hours_per_day
+            op_days = item.operating_days
+            util = item.utilization_factor
+        else:
+            eq_id = str(item.get("equipment_id", "UNKNOWN"))
+            eq_name = str(item.get("equipment_name", "Unknown Equipment"))
+            eq_type = str(item.get("equipment_type", "Other"))
+            rated_power = float(item["rated_power_kw"])
+            qty = int(item["quantity"])
+            hpd = float(item["hours_per_day"])
+            op_days = int(item["operating_days"])
+            util = float(item["utilization_factor"])
+
+        kwh = calculate_equipment_energy_kwh(
+            rated_power_kw=rated_power,
+            quantity=qty,
+            hours_per_day=hpd,
+            operating_days=op_days,
+            utilization_factor=util,
+        )
+        total_energy += kwh
+
+        trace = (
+            f"{rated_power} kW * {qty} unit(s) * {hpd} hrs/day * "
+            f"{op_days} days * {util} util = {kwh:.2f} kWh"
+        )
+
+        per_equipment.append({
+            "equipment_id": eq_id,
+            "equipment_name": eq_name,
+            "equipment_type": eq_type,
+            "rated_power_kw": rated_power,
+            "quantity": qty,
+            "hours_per_day": hpd,
+            "operating_days": op_days,
+            "utilization_factor": util,
+            "estimated_energy_kwh": round(kwh, 2),
+            "calculation_trace": trace,
+        })
+
+    assumptions = {
+        "formula": (
+            "estimated_energy_kwh = rated_power_kw * quantity * hours_per_day * operating_days * utilization_factor"
+        ),
+        "traceability": "Every kWh is explicitly mapped back to individual equipment operational parameters.",
+        "area_independence": (
+            "Energy consumption is derived strictly from rated mechanical/electrical equipment loads, "
+            "not floor area."
+        ),
+        "equipment_count": len(equipment_list),
+    }
+
+    return {
+        "per_equipment_energy": per_equipment,
+        "total_energy": round(total_energy, 2),
+        "assumptions": assumptions,
+    }
 
 
 def calculate_epi(annual_energy_kwh: float, net_built_up_area_m2: float) -> float:
@@ -61,29 +140,11 @@ class BaselineService:
 
     def compute_equipment_baseline(self, equipment_list: List[Equipment]) -> Dict[str, Any]:
         """
-        Computes baseline metrics aggregated across equipment inventory.
-        Uses canonical equipment energy formula.
+        Computes baseline metrics aggregated across equipment inventory using calculate_equipment_energy.
         """
-        total_baseline_kwh = 0.0
-        equipment_breakdown = []
-
-        for eq in equipment_list:
-            eq_energy_kwh = calculate_equipment_energy_kwh(
-                rated_power_kw=eq.rated_power_kw,
-                quantity=eq.quantity,
-                hours_per_day=eq.hours_per_day,
-                operating_days=eq.operating_days,
-                utilization_factor=eq.utilization_factor,
-            )
-            total_baseline_kwh += eq_energy_kwh
-            equipment_breakdown.append({
-                "equipment_id": eq.equipment_id,
-                "equipment_name": eq.equipment_name,
-                "equipment_type": eq.equipment_type,
-                "estimated_energy_kwh": eq_energy_kwh,
-            })
-
+        calc = calculate_equipment_energy(equipment_list)
         return {
-            "baseline_energy_kwh": total_baseline_kwh,
-            "equipment_breakdown": equipment_breakdown,
+            "baseline_energy_kwh": calc["total_energy"],
+            "equipment_breakdown": calc["per_equipment_energy"],
+            "assumptions": calc["assumptions"],
         }

@@ -1,0 +1,32 @@
+{
+  "dataset_name": "Demo Commercial Office Energy Profile",
+  "dataset_label": "Demo dataset \u2014 simulated",
+  "source": "Synthetically generated with deterministic seed (seed=42)",
+  "is_real_world_measurement": false,
+  "rows_count": 1488,
+  "date_range": {
+    "start": "2026-07-01 00:00:00",
+    "end": "2026-08-31 23:00:00"
+  },
+  "sampling_frequency": "1 hour",
+  "injected_anomalies": [
+    {
+      "date": "2026-08-10",
+      "hours": "19:00 - 23:00",
+      "type": "HVAC operating after closing",
+      "description": "Chiller and AHU units remained at day setpoint after office closing."
+    },
+    {
+      "date": "2026-08-16",
+      "hours": "01:00 - 06:00",
+      "type": "Lighting operating overnight",
+      "description": "Floor LED arrays left energized during empty Sunday overnight."
+    },
+    {
+      "date": "2026-08-24",
+      "hours": "12:00 - 17:00",
+      "type": "Compressor extended operation",
+      "description": "Air compressor failed to unload, running continuous full-duty cycle."
+    }
+  ]
+}

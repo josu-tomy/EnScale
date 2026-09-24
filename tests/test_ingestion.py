@@ -1,5 +1,5 @@
 """
-Tests for data ingestion and data mode contracts.
+Tests for data ingestion, CSV validation, and data mode contracts.
 """
 
 import io
@@ -8,31 +8,81 @@ import pytest
 
 from domain.enums import DataMode
 from domain.models import Equipment
-from services.ingestion_service import IngestionService
+from services.ingestion_service import (
+    load_energy_csv,
+    get_energy_csv_template,
+    IngestionService,
+)
 
 
-def test_ingest_valid_historical_csv():
-    service = IngestionService(DataMode.MODE_1_HISTORICAL)
+def test_load_energy_csv_valid():
     csv_data = io.StringIO(
         "timestamp,energy_kwh,temperature_c\n"
-        "2026-08-01 00:00:00,45.2,28.5\n"
         "2026-08-01 01:00:00,42.1,27.8\n"
+        "2026-08-01 00:00:00,45.2,28.5\n"
+        "2026-08-01 02:00:00,40.0,27.1\n"
     )
-    df = service.ingest_historical_csv(csv_data)
-    assert len(df) == 2
-    assert "timestamp" in df.columns
-    assert "energy_kwh" in df.columns
-    assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
+    df = load_energy_csv(csv_data)
+    assert len(df) == 3
+    assert "validation_info" in df.attrs
+    val_info = df.attrs["validation_info"]
+    assert val_info["is_valid"] is True
+    assert val_info["row_count"] == 3
+    assert val_info["sampling_frequency"] == "Hourly"
+    # Verify chronological sorting was performed
+    assert df["timestamp"].iloc[0] == pd.Timestamp("2026-08-01 00:00:00")
+    assert df["timestamp"].iloc[-1] == pd.Timestamp("2026-08-01 02:00:00")
 
 
-def test_ingest_missing_required_column_raises():
-    service = IngestionService(DataMode.MODE_1_HISTORICAL)
+def test_load_energy_csv_missing_required_column():
     csv_data = io.StringIO(
         "timestamp,power_kw\n"
         "2026-08-01 00:00:00,45.2\n"
     )
-    with pytest.raises(ValueError, match="Historical data validation failed"):
-        service.ingest_historical_csv(csv_data)
+    with pytest.raises(ValueError, match="Missing required energy column"):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_prohibited_alias():
+    # Prohibited alias 'energy' instead of 'energy_kwh'
+    csv_data = io.StringIO(
+        "timestamp,energy\n"
+        "2026-08-01 00:00:00,45.2\n"
+    )
+    with pytest.raises(ValueError, match="Prohibited alias column 'energy'"):
+        load_energy_csv(csv_data)
+
+
+def test_load_energy_csv_duplicate_timestamps():
+    csv_data = io.StringIO(
+        "timestamp,energy_kwh\n"
+        "2026-08-01 00:00:00,45.2\n"
+        "2026-08-01 00:00:00,46.0\n"
+        "2026-08-01 01:00:00,42.1\n"
+    )
+    df = load_energy_csv(csv_data)
+    # Does not silently discard duplicates
+    assert len(df) == 3
+    val_info = df.attrs["validation_info"]
+    assert val_info["duplicate_timestamps_count"] == 1
+    assert any("duplicate timestamp" in w for w in val_info["warnings"])
+
+
+def test_load_energy_csv_negative_energy():
+    csv_data = io.StringIO(
+        "timestamp,energy_kwh\n"
+        "2026-08-01 00:00:00,45.2\n"
+        "2026-08-01 01:00:00,-10.0\n"
+    )
+    with pytest.raises(ValueError, match="negative energy consumption"):
+        load_energy_csv(csv_data)
+
+
+def test_csv_template_download():
+    template = get_energy_csv_template()
+    assert "timestamp,energy_kwh,temperature_c,occupancy,equipment_load_kw" in template
+    lines = template.strip().split("\n")
+    assert len(lines) >= 2
 
 
 def test_ingest_equipment_inventory():

@@ -1,49 +1,89 @@
 """
 Preprocessing and feature engineering module for EnScale ML pipelines.
+
+Strictly follows:
+- Temporal features: hour, day_of_week, day_of_month, month, is_weekend
+- Environmental & building metadata features (where available):
+  air_temperature, dew_temperature, building_area, primary_use, year_built, floor_count
+- Chronological splitting (70% train, 15% validation, 15% final test)
+- Strict leakage avoidance (no future energy measurements or future target leakage)
 """
 
-from typing import Tuple, List, Optional
-import pandas as pd
+from typing import Tuple, List, Optional, Dict, Any
 import numpy as np
+import pandas as pd
 
 
-def prepare_time_features(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Extracts standard cyclical and calendar time features from the canonical timestamp column.
+    Generates required model features:
+    - hour
+    - day_of_week
+    - day_of_month
+    - month
+    - is_weekend
+    - cyclical time encodings (hour_sin, hour_cos)
+    - environmental/building metadata where available:
+      air_temperature, dew_temperature, building_area, primary_use, year_built, floor_count
     """
     out = df.copy()
+
     if "timestamp" not in out.columns:
         raise ValueError("DataFrame must contain canonical 'timestamp' column")
 
     out["timestamp"] = pd.to_datetime(out["timestamp"])
-    out["hour"] = out["timestamp"].dt.hour
-    out["dayofweek"] = out["timestamp"].dt.dayofweek
-    out["is_weekend"] = (out["dayofweek"] >= 5).astype(int)
-    out["month"] = out["timestamp"].dt.month
 
-    # Cyclical hour encoding
+    # Required temporal features
+    out["hour"] = out["timestamp"].dt.hour
+    out["day_of_week"] = out["timestamp"].dt.dayofweek
+    out["day_of_month"] = out["timestamp"].dt.day
+    out["month"] = out["timestamp"].dt.month
+    out["is_weekend"] = (out["day_of_week"] >= 5).astype(int)
+
+    # Cyclical hour features
     out["hour_sin"] = np.sin(2 * np.pi * out["hour"] / 24.0)
     out["hour_cos"] = np.cos(2 * np.pi * out["hour"] / 24.0)
+
+    # Map temperature column aliases if present
+    if "temperature_c" in out.columns and "air_temperature" not in out.columns:
+        out["air_temperature"] = out["temperature_c"]
+
+    if "net_built_up_area_m2" in out.columns and "building_area" not in out.columns:
+        out["building_area"] = out["net_built_up_area_m2"]
 
     return out
 
 
-def split_features_target(
+# Backward compatibility alias
+prepare_time_features = prepare_features
+
+
+def chronological_time_split(
     df: pd.DataFrame,
-    feature_cols: Optional[List[str]] = None,
-    target_col: str = "energy_kwh",
-) -> Tuple[pd.DataFrame, pd.Series]:
+    train_pct: float = 0.70,
+    val_pct: float = 0.15,
+    test_pct: float = 0.15,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Separates feature matrix X and target vector y.
-    Target must be canonical energy_kwh.
+    Splits DataFrame chronologically without shuffling or lookahead leakage:
+    - Exactly 70% train
+    - Exactly 15% validation
+    - Exactly 15% final test
+
+    The final test set remains untouched until final evaluation.
     """
-    if target_col not in df.columns:
-        raise ValueError(f"Target column '{target_col}' not found in DataFrame")
+    if abs((train_pct + val_pct + test_pct) - 1.0) > 1e-5:
+        raise ValueError("train_pct + val_pct + test_pct must sum to 1.0")
 
-    if feature_cols is None:
-        candidate_cols = ["hour", "dayofweek", "is_weekend", "month", "hour_sin", "hour_cos", "temperature_c", "occupancy"]
-        feature_cols = [c for c in candidate_cols if c in df.columns]
+    # Ensure chronological order
+    sorted_df = df.sort_values("timestamp").reset_index(drop=True)
+    n = len(sorted_df)
 
-    X = df[feature_cols].copy()
-    y = df[target_col].copy()
-    return X, y
+    n_train = int(np.floor(n * train_pct))
+    n_val = int(np.floor(n * val_pct))
+
+    train_df = sorted_df.iloc[:n_train].copy()
+    val_df = sorted_df.iloc[n_train : n_train + n_val].copy()
+    test_df = sorted_df.iloc[n_train + n_val :].copy()
+
+    return train_df, val_df, test_df
