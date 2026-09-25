@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Dict, Any
 import json
 
+from config.environment import load_environment
+
+# Load local secrets/config before application modules read os.environ.
+load_environment()
+
 from config.constants import (
     APP_NAME,
     APP_TAGLINE,

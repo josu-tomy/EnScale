@@ -11,6 +11,7 @@ Complete Decision Loop:
 
 from pathlib import Path
 import json
+from uuid import uuid4
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -40,9 +41,17 @@ from services.baseline_service import calculate_equipment_energy, calculate_equi
 from ml.predict import EnergyPredictor
 from services.anomaly_service import detect_anomalies, calculate_injected_anomaly_recall
 from services.optimization_service import (
-    optimize_equipment_schedule,
+    optimize_equipment_schedule_safely,
     InfeasibleConstraintError,
 )
+from services.equipment_service import (
+    add_equipment,
+    available_operating_window,
+    create_equipment,
+    remove_equipment,
+    validate_equipment_for_building,
+)
+from services.validation_service import validate_building_profile
 from services.impact_service import calculate_impact
 from services.incentive_service import (
     find_incentives,
@@ -53,6 +62,8 @@ from services.opportunity_service import (
     explain_anomaly_episodes,
     generate_decision_summary,
 )
+from services.ai.manager import AIManager
+from services.analysis_service import build_analysis_context
 
 
 # Workflow step definitions
@@ -120,11 +131,11 @@ def load_demo_scenario():
             equipment_name="Central Chiller & Air Conditioning",
             rated_power_kw=35.0,
             quantity=1,
-            hours_per_day=9.0,
+            hours_per_day=8.0,
             operating_days=22,
             utilization_factor=0.80,
             minimum_hours=7.0,
-            maximum_hours=9.0,
+            maximum_hours=8.0,
             is_flexible=True,
             needed_from_opening=True,
             needed_until_closing=False,
@@ -149,11 +160,11 @@ def load_demo_scenario():
             equipment_name="Workstation & Floor Lighting",
             rated_power_kw=10.0,
             quantity=1,
-            hours_per_day=10.0,
+            hours_per_day=8.0,
             operating_days=22,
             utilization_factor=0.90,
-            minimum_hours=10.0,
-            maximum_hours=10.0,
+            minimum_hours=8.0,
+            maximum_hours=8.0,
             is_flexible=False,
             needed_until_closing=False,
         ),
@@ -230,11 +241,11 @@ def init_session_state():
                 equipment_name="Central Chiller & Air Conditioning",
                 rated_power_kw=35.0,
                 quantity=1,
-                hours_per_day=9.0,
+                hours_per_day=8.0,
                 operating_days=22,
                 utilization_factor=0.80,
                 minimum_hours=7.0,
-                maximum_hours=9.0,
+                maximum_hours=8.0,
                 is_flexible=True,
                 needed_from_opening=True,
                 needed_until_closing=False,
@@ -259,11 +270,11 @@ def init_session_state():
                 equipment_name="Workstation & Floor Lighting",
                 rated_power_kw=10.0,
                 quantity=1,
-                hours_per_day=10.0,
+                hours_per_day=8.0,
                 operating_days=22,
                 utilization_factor=0.90,
-                minimum_hours=10.0,
-                maximum_hours=10.0,
+                minimum_hours=8.0,
+                maximum_hours=8.0,
                 is_flexible=False,
                 needed_until_closing=False,
             ),
@@ -293,7 +304,7 @@ def set_step(step_name: str):
 
 
 def render_progress_indicator(current_step: str):
-    """Renders a clean top-level horizontal progress indicator."""
+    """Renders a compact, professional horizontal stepper with progress indicator."""
     current_idx = WORKFLOW_STEPS.index(current_step) if current_step in WORKFLOW_STEPS else 0
 
     cols = st.columns(len(WORKFLOW_STEPS))
@@ -301,17 +312,14 @@ def render_progress_indicator(current_step: str):
         is_active = (idx == current_idx)
         is_done = (idx < current_idx)
 
-        step_number = idx + 1
+        step_number = f"0{idx + 1}"
         step_title = step.split(". ")[-1].upper()
 
-        if is_done:
-            btn_label = f"✓ {step_number}. {step_title}"
-            btn_type = "secondary"
-        elif is_active:
-            btn_label = f"● {step_number}. {step_title}"
+        if is_active:
+            btn_label = f"{step_number} {step_title}"
             btn_type = "primary"
         else:
-            btn_label = f"{step_number}. {step_title}"
+            btn_label = f"{step_number} {step_title}"
             btn_type = "secondary"
 
         if col.button(
@@ -323,66 +331,251 @@ def render_progress_indicator(current_step: str):
         ):
             set_step(step)
 
+    progress_val = int(((current_idx + 1) / len(WORKFLOW_STEPS)) * 100)
     st.markdown(
-        """
-        <hr style="margin-top: 8px; margin-bottom: 20px; border: none; border-top: 1px solid #e2e8f0;">
+        f"""
+        <div style="height: 3px; background: #e2e8f0; border-radius: 2px; margin-top: 4px; margin-bottom: 22px; position: relative;">
+            <div style="height: 3px; width: {progress_val}%; background: #1d4ed8; border-radius: 2px; transition: width 0.3s ease;"></div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
 
 def apply_custom_styling():
-    """Applies clean, engineering- and decision-support-oriented styling."""
+    """Applies modern B2B energy SaaS design system: Blue + White + Dark Slate."""
     st.markdown(
         """
         <style>
         /* Base typography and theme colors */
         :root {
-            --enscale-navy: #0f172a;
-            --enscale-teal: #0f766e;
-            --enscale-green: #059669;
-            --enscale-mint: #ecfdf5;
-            --enscale-slate: #64748b;
-            --enscale-bg: #f8fafc;
+            --primary-blue: #1d4ed8;
+            --primary-blue-hover: #1e40af;
+            --primary-blue-light: #eff6ff;
+            --navy-dark: #0f172a;
+            --slate-dark: #1e293b;
+            --slate-muted: #64748b;
+            --border-light: #e2e8f0;
+            --border-medium: #cbd5e1;
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --savings-green: #059669;
+            --savings-green-bg: #ecfdf5;
+            --warning-amber: #d97706;
+            --warning-amber-bg: #fffbeb;
+            --flag-red: #dc2626;
+            --flag-red-bg: #fef2f2;
         }
+
+        /* Top Shell Header Bar */
+        .top-shell-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .brand-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .brand-subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .shell-status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+        }
+
+        .shell-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #059669;
+            margin-right: 6px;
+            display: inline-block;
+        }
+
+        /* Streamlit Native Metric Override - Anti-clipping & SaaS Styling */
+        [data-testid="stMetric"] {
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 8px !important;
+            padding: 14px 18px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            font-size: 0.78rem !important;
+            font-weight: 700 !important;
+            color: #64748b !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            margin-bottom: 4px !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 1.45rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            line-height: 1.25 !important;
+        }
+
+        [data-testid="stMetricDelta"] {
+            font-size: 0.82rem !important;
+            font-weight: 600 !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+        }
+
+        /* Step Badge */
+        .step-badge {
+            display: inline-block;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
         .decision-loop-badge {
             display: inline-block;
-            background-color: #0f172a;
-            color: #38bdf8;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 10px;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
             border-radius: 4px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
+
+        /* Custom Card Framework */
         .metric-card {
             border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 16px;
             background-color: #ffffff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            box-sizing: border-box;
+            word-break: break-word;
         }
+
+        .data-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px;
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
         .opportunity-box {
-            border-left: 4px solid #0f766e;
-            background-color: #f0fdfa;
-            padding: 14px 18px;
-            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #1d4ed8;
+            background-color: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 6px;
             margin-bottom: 14px;
+            box-sizing: border-box;
         }
+
         .action-card {
             border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 18px;
             margin-bottom: 14px;
             background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+            box-sizing: border-box;
         }
+
         .decision-summary-container {
             background-color: #0f172a;
             color: #ffffff;
             border-radius: 8px;
-            padding: 20px;
+            padding: 20px 24px;
             margin-bottom: 24px;
+            box-sizing: border-box;
+        }
+
+        /* AI Decision Support Card */
+        .ai-card {
+            background: #0f172a;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            border: 1px solid #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+            box-sizing: border-box;
+        }
+
+        .ai-card-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-provider-pill {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            letter-spacing: 0.2px;
+        }
+
+        .ai-provider-pill-live {
+            background: #0c4a6e;
+            color: #7dd3fc;
+            border: 1px solid #0284c7;
         }
         </style>
         """,
@@ -390,10 +583,35 @@ def apply_custom_styling():
     )
 
 
+def render_top_header():
+    """Renders the top application shell header bar."""
+    b = st.session_state.get("building_profile")
+    active_facility_str = f"{b.building_type} · {b.location_state} · {b.net_built_up_area_m2:,.0f} m²" if b else "Facility"
+    st.markdown(
+        f"""
+        <div class="top-shell-header">
+            <div>
+                <div class="brand-title">{APP_NAME}</div>
+                <div class="brand-subtitle">{APP_TAGLINE}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 0.82rem; font-weight: 600; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 9999px;">
+                    {active_facility_str}
+                </div>
+                <div class="shell-status-badge">
+                    <span class="shell-status-dot"></span>Analysis ready
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(
-        page_title=f"{APP_NAME} — ML-Assisted Energy Decision Platform",
-        page_icon="⚡",
+        page_title=f"{APP_NAME} — Energy Intelligence for Buildings",
+        page_icon=None,
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -401,11 +619,11 @@ def main() -> None:
     init_session_state()
     apply_custom_styling()
 
-    # --- Clean Non-Intrusive Sidebar ---
+    # --- Clean Non-Intrusive Sidebar Context Panel ---
     b = st.session_state["building_profile"]
     with st.sidebar:
-        st.markdown(f"### ⚡ **{APP_NAME}**")
-        st.caption(f"v{APP_VERSION} • ML-Assisted Energy Decision Platform")
+        st.markdown(f"### **{APP_NAME}**")
+        st.caption(f"v{APP_VERSION} • {APP_TAGLINE}")
         st.markdown("---")
 
         st.markdown("#### **Active Facility**")
@@ -419,38 +637,37 @@ def main() -> None:
         st.markdown("---")
 
         st.markdown("#### **Data Origin**")
-        st.info(f"📁 {st.session_state['data_source_label']}")
+        st.info(f"{st.session_state['data_source_label']}")
 
         st.markdown("---")
-        if st.button("⚡ Reset / Load Demo Scenario", use_container_width=True, help="Loads Mumbai commercial office reference scenario."):
+        if st.button("Reset to Demo Scenario", use_container_width=True, help="Loads Mumbai commercial office reference scenario."):
             load_demo_scenario()
             set_step(STEP_BUILDING)
 
-        if st.button("🔄 Start Over / Edit Details", use_container_width=True):
+        if st.button("Edit Facility & Settings", use_container_width=True):
             set_step(STEP_BUILDING)
 
-    # --- Top-Level Progress Indicator ---
+    # --- Top-Level Header Shell ---
+    render_top_header()
+
+    # --- Top-Level Progress Stepper ---
     current_step = st.session_state["workflow_step"]
     render_progress_indicator(current_step)
-
     # =========================================================================
     # SCREEN 1: BUILDING ("Tell us about your building")
     # =========================================================================
     if current_step == STEP_BUILDING:
-        st.markdown("<span class='decision-loop-badge'>STEP 1 OF 5 • FACILITY CONTEXT & ENVELOPE</span>", unsafe_allow_html=True)
+        st.markdown("<span class='step-badge'>STEP 1 OF 5 • FACILITY CONTEXT & ENVELOPE</span>", unsafe_allow_html=True)
         st.title("Tell us about your building")
-        st.markdown(
-            "Define the facility and its operating context. "
-            "EnScale uses these operational parameters and equipment bounds to evaluate energy behavior without making value judgments."
-        )
+        st.markdown("Define your facility envelope, operating schedule, and equipment inventory. EnScale establishes deterministic baselines from these physical constraints.")
 
-        # Quick demo banner
+        # Quick demo bar
         with st.container():
             d_col1, d_col2 = st.columns([3, 1])
             with d_col1:
                 st.caption("Need a quick demonstration? Load the pre-configured commercial facility reference scenario with one click:")
             with d_col2:
-                if st.button("⚡ Load Demo Scenario", use_container_width=True):
+                if st.button("Load Demo Scenario", use_container_width=True):
                     load_demo_scenario()
                     st.rerun()
 
@@ -460,7 +677,7 @@ def main() -> None:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Building Characteristics")
+            st.subheader("Building profile")
             building_types = [
                 "Commercial Office",
                 "Retail Store / Shop",
@@ -506,7 +723,7 @@ def main() -> None:
             )
 
         with col2:
-            st.subheader("Operating Envelope & Schedule")
+            st.subheader("Operating pattern")
             states = [
                 "Maharashtra",
                 "Gujarat",
@@ -539,6 +756,7 @@ def main() -> None:
                     index=int(b.operating_start),
                     format_func=lambda h: f"{h:02d}:00 ({'12 AM' if h==0 else f'{h} AM' if h<12 else '12 PM' if h==12 else f'{h-12} PM'})",
                     help="Start of normal business occupancy.",
+                    key="building_operating_start",
                 )
             with h_col2:
                 op_end = st.selectbox(
@@ -547,6 +765,7 @@ def main() -> None:
                     index=int(b.operating_end),
                     format_func=lambda h: f"{h:02d}:00 ({'12 AM' if h==0 else f'{h} AM' if h<12 else '12 PM' if h==12 else f'{h-12} PM'})",
                     help="End of normal business occupancy.",
+                    key="building_operating_end",
                 )
 
             op_days = st.number_input(
@@ -566,38 +785,196 @@ def main() -> None:
                 help="Target or allocated monthly electricity budget.",
             )
 
+        window_hours = available_operating_window({"operating_start": op_start, "operating_end": op_end})
         st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">Available Operating Window</span>
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 9999px;">
+                        {window_hours} hours/day ({op_start:02d}:00 to {op_end:02d}:00)
+                    </span>
+                </div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">
+                    Equipment runtime parameters and constrained schedule optimization routines are bounded within this daily facility window.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        # Equipment Inventory Details
-        with st.expander("⚙️ Major Equipment Inventory & Operational Constraints", expanded=True):
-            st.markdown(
-                "Specify key electrical and mechanical loads. "
-                "**Non-flexible equipment** remains strictly unchanged during optimization. "
-                "**Flexible equipment** will be evaluated for schedule optimization within the defined minimum runtime and facility envelope."
-            )
+        # Equipment Section
+        st.subheader("Equipment")
+        st.markdown(
+            "Specify key electrical and mechanical loads. "
+            "**Flexible equipment** can be evaluated for schedule optimization within the defined runtime limits and operating window. "
+            "**Non-flexible equipment** runs according to its fixed schedule."
+        )
 
-            eq_list = st.session_state["equipment_inventory"]
-            for idx, eq in enumerate(eq_list):
-                c_name, c_pwr, c_hrs, c_min, c_flex = st.columns([3, 2, 2, 2, 2])
-                with c_name:
-                    st.text_input("Equipment", value=eq.equipment_name, key=f"eq_name_{idx}", disabled=True)
-                with c_pwr:
-                    eq.rated_power_kw = st.number_input(f"Power (kW)", min_value=0.5, value=float(eq.rated_power_kw), step=1.0, key=f"eq_pwr_{idx}")
-                with c_hrs:
-                    eq.hours_per_day = st.number_input(f"Daily runtime (h)", min_value=1.0, max_value=24.0, value=float(eq.hours_per_day), step=0.5, key=f"eq_hrs_{idx}")
-                with c_min:
-                    eq.minimum_hours = st.number_input(f"Min required (h)", min_value=1.0, max_value=float(eq.hours_per_day), value=float(eq.minimum_hours), step=0.5, key=f"eq_min_{idx}")
-                with c_flex:
-                    st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                    eq.is_flexible = st.checkbox("Flexible?", value=eq.is_flexible, key=f"eq_flex_{idx}", help="Can this load be rescheduled or trimmed?")
+        eq_list = st.session_state["equipment_inventory"]
+        if window_hours <= 0:
+            st.error("Facility closing time must be later than opening time to provide an operating window.")
+
+        equipment_types = [
+            "HVAC",
+            "Lighting",
+            "Motors & Pumps",
+            "Air Compressors",
+            "Refrigeration",
+            "IT Equipment",
+            "Process Machinery",
+            "Other",
+        ]
+
+        if not eq_list:
+            st.info("No equipment currently configured. Click 'Add Equipment' below to configure your building's loads.")
+
+        for eq in list(eq_list):
+            with st.container(border=True):
+                # Header row: Equipment title, type badge, and Remove action
+                h_left, h_right = st.columns([4, 1])
+                with h_left:
+                    st.markdown(
+                        f"<div style='font-size: 1.05rem; font-weight: 700; color: #0f172a; margin-top: 4px;'>"
+                        f"{eq.equipment_name} &nbsp;·&nbsp; "
+                        f"<span style='font-size: 0.85rem; font-weight: 600; color: #0f766e; background: #f0fdfa; border: 1px solid #ccfbf1; padding: 2px 8px; border-radius: 9999px;'>{eq.equipment_type}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                with h_right:
+                    if st.button("Remove", key=f"equipment_{eq.equipment_id}_remove", use_container_width=True):
+                        remove_equipment(eq_list, eq.equipment_id)
+                        st.rerun()
+
+                # Row 1: Equipment name & Equipment type
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    eq.equipment_name = st.text_input(
+                        "Equipment name",
+                        value=eq.equipment_name,
+                        key=f"equipment_{eq.equipment_id}_equipment_name",
+                    )
+                with c2:
+                    current_type = eq.equipment_type if eq.equipment_type in equipment_types else "Other"
+                    eq.equipment_type = st.selectbox(
+                        "Equipment type",
+                        equipment_types,
+                        index=equipment_types.index(current_type),
+                        key=f"equipment_{eq.equipment_id}_equipment_type",
+                    )
+
+                # Row 2: Quantity, Rated power (kW), Hours/day, Flexible?
+                c3, c4, c5, c6 = st.columns([1, 1.2, 1.2, 1])
+                with c3:
+                    eq.quantity = st.number_input(
+                        "Quantity",
+                        min_value=1,
+                        max_value=100000,
+                        value=int(eq.quantity),
+                        step=1,
+                        key=f"equipment_{eq.equipment_id}_quantity",
+                        help="Number of identical equipment units installed.",
+                    )
+                with c4:
+                    eq.rated_power_kw = st.number_input(
+                        "Rated power (kW)",
+                        min_value=0.1,
+                        max_value=100000.0,
+                        value=float(eq.rated_power_kw),
+                        step=1.0,
+                        key=f"equipment_{eq.equipment_id}_rated_power_kw",
+                        help="Nameplate power draw per unit in kilowatts (kW).",
+                    )
+                with c5:
+                    eq.hours_per_day = st.number_input(
+                        "Hours/day",
+                        min_value=0.0,
+                        max_value=24.0,
+                        value=float(eq.hours_per_day),
+                        step=0.5,
+                        key=f"equipment_{eq.equipment_id}_hours_per_day",
+                        help="Typical daily operating hours.",
+                    )
+                with c6:
+                    st.write("")
+                    st.write("")
+                    eq.is_flexible = st.checkbox(
+                        "Flexible?",
+                        value=eq.is_flexible,
+                        key=f"equipment_{eq.equipment_id}_is_flexible",
+                        help="Can this load be shifted or rescheduled within the operating window?",
+                    )
+
+                # Row 3: Minimum runtime, Maximum runtime
+                c7, c8 = st.columns(2)
+                with c7:
+                    eq.minimum_hours = st.number_input(
+                        "Minimum runtime",
+                        min_value=0.0,
+                        max_value=24.0,
+                        value=float(eq.minimum_hours),
+                        step=0.5,
+                        key=f"equipment_{eq.equipment_id}_minimum_hours",
+                        help="Minimum required daily runtime (hours) to maintain operations.",
+                    )
+                with c8:
+                    eq.maximum_hours = st.number_input(
+                        "Maximum runtime",
+                        min_value=0.0,
+                        max_value=24.0,
+                        value=float(eq.maximum_hours),
+                        step=0.5,
+                        key=f"equipment_{eq.equipment_id}_maximum_hours",
+                        help="Maximum permissible daily runtime (hours) within the operating window.",
+                    )
+
+                # Collapsible advanced settings for fine-tuning
+                with st.expander("Additional equipment parameters", expanded=False):
+                    adv1, adv2 = st.columns(2)
+                    with adv1:
+                        eq.operating_days = st.number_input(
+                            "Operating days per month",
+                            min_value=1,
+                            max_value=31,
+                            value=int(eq.operating_days),
+                            step=1,
+                            key=f"equipment_{eq.equipment_id}_operating_days",
+                            help="Monthly active operating days for this specific load.",
+                        )
+                    with adv2:
+                        eq.utilization_factor = st.number_input(
+                            "Operating load factor",
+                            min_value=0.0,
+                            max_value=1.0,
+                            value=float(eq.utilization_factor),
+                            step=0.05,
+                            key=f"equipment_{eq.equipment_id}_utilization_factor",
+                            help="Average operational load factor (0.0 to 1.0).",
+                        )
+
+                equipment_check = validate_equipment_for_building(eq, {
+                    "operating_start": int(op_start), "operating_end": int(op_end)
+                })
+                if not equipment_check.is_valid:
+                    for message in equipment_check.errors:
+                        st.error(f"{eq.equipment_name}: {message}")
+
+        if st.button("Add Equipment", key="add_equipment", use_container_width=True):
+            if window_hours <= 0:
+                st.error("Set a valid building operating window before adding equipment.")
+            else:
+                new_equipment = create_equipment(f"EQ-USER-{uuid4().hex[:8].upper()}", window_hours)
+                add_equipment(eq_list, new_equipment)
+                st.rerun()
 
         st.markdown("---")
 
         # Navigation Action
         nav_space, nav_col = st.columns([3, 1])
         with nav_col:
-            if st.button("Continue to Data →", type="primary", use_container_width=True):
-                st.session_state["building_profile"] = BuildingProfile(
+            if st.button("Continue to Data →", type="primary", use_container_width=True, key="continue_to_data_button"):
+                candidate_profile = BuildingProfile(
                     building_id=b.building_id,
                     building_type=b_type,
                     location_state=loc_state,
@@ -610,18 +987,32 @@ def main() -> None:
                     monthly_budget_inr=float(budget_inr),
                     tariff_inr_per_kwh=float(tariff),
                 )
-                set_step(STEP_DATA)
-
+                profile_validation = validate_building_profile(candidate_profile)
+                if not profile_validation.is_valid:
+                    for message in profile_validation.errors:
+                        st.error(message)
+                invalid_equipment = [
+                    (eq, validate_equipment_for_building(eq, candidate_profile))
+                    for eq in st.session_state["equipment_inventory"]
+                ]
+                invalid_equipment = [(eq, result) for eq, result in invalid_equipment if not result.is_valid]
+                if invalid_equipment:
+                    for eq, result in invalid_equipment:
+                        for message in result.errors:
+                            st.error(f"{eq.equipment_name}: {message}")
+                elif profile_validation.is_valid:
+                    st.session_state["building_profile"] = candidate_profile
+                    set_step(STEP_DATA)
     # =========================================================================
     # SCREEN 2: DATA ("Add your energy data")
     # =========================================================================
     elif current_step == STEP_DATA:
-        st.markdown("<span class='decision-loop-badge'>STEP 2 OF 5 • INGESTION & DATA CONTRACT</span>", unsafe_allow_html=True)
+        st.markdown("<span class='step-badge'>STEP 2 OF 5 • INGESTION & DATA CONTRACT</span>", unsafe_allow_html=True)
         st.title("Add your energy data")
         st.markdown("Supply your interval electricity readings. EnScale verifies data integrity and structural contracts automatically.")
 
         # Clear Input Contract Box
-        with st.expander("📋 Realistic Input Contract: What data does EnScale accept?", expanded=False):
+        with st.expander("Realistic Input Contract: Accepted Data Formats", expanded=False):
             st.markdown(
                 """
                 | Column Name | Status | Type | Description |
@@ -649,7 +1040,7 @@ def main() -> None:
                 "generated with deterministic diurnal curves and temperature-sensitivity formulas."
             )
             st.info(
-                f"💡 **{demo_banner_label}**\n\n"
+                f"**{demo_banner_label}**\n\n"
                 "• **Origin:** Deterministic simulated dataset (62 days, 1,488 hourly interval readings from a 2,500 m² facility in Mumbai).\n"
                 "• **Characteristics:** Models diurnal business rhythms, partial weekend operations, weather-driven cooling demand, and controlled operational anomalies.\n"
                 "• *Note:* The exact same ML and optimization pipeline is designed to accept historical meter CSVs from real buildings."
@@ -669,7 +1060,7 @@ def main() -> None:
             with c1:
                 template_data = get_energy_csv_template()
                 st.download_button(
-                    label="📥 Download canonical CSV template",
+                    label="Download canonical CSV template",
                     data=template_data,
                     file_name="enscale_energy_template.csv",
                     mime="text/csv",
@@ -682,14 +1073,14 @@ def main() -> None:
                     user_df = load_energy_csv(uploaded_file)
                     st.session_state["active_df"] = user_df
                     st.session_state["data_source_label"] = "User Uploaded Meter Data"
-                    st.success("✓ CSV verified and loaded successfully.")
+                    st.success("CSV verified and loaded successfully.")
                 except Exception as err:
                     st.error(f"Could not read CSV file: {err}")
 
-        # Evaluation Dataset Performance Section (Responsible presentation - FIX 6)
+        # Evaluation Dataset Performance Section
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("Evaluation dataset performance")
-        st.caption("Evaluation dataset performance of the underlying `HistGradientBoostingRegressor` model trained without lookahead leakage.")
+        st.caption("Evaluation dataset performance of the underlying HistGradientBoostingRegressor model trained without lookahead leakage.")
 
         eval_data = load_evaluation_metrics()
         test_m = eval_data.get("test_comparison", {}).get("ml_metrics", {}) if eval_data else {}
@@ -711,14 +1102,14 @@ def main() -> None:
             st.markdown("---")
             st.markdown("### Loaded Data Summary")
             s1, s2, s3, s4 = st.columns(4)
-            s1.metric("Status", "✓ Clean & Validated")
+            s1.metric("Status", "Clean & Validated")
             s2.metric("Interval Count", f"{len(df):,} hours")
             start_date = str(df["timestamp"].iloc[0])[:10]
             end_date = str(df["timestamp"].iloc[-1])[:10]
             s3.metric("Date Span", f"{start_date} to {end_date}")
             s4.metric("Frequency", "1-Hour Intervals")
 
-            # Equipment Inventory Coverage vs Meter Data (FIX 5)
+            # Equipment Inventory Coverage vs Meter Data
             eq_inventory = st.session_state.get("equipment_inventory", [])
             if eq_inventory:
                 eq_calc = calculate_equipment_energy(eq_inventory)
@@ -729,7 +1120,7 @@ def main() -> None:
                 c_cov1.metric("Equipment Baseline Coverage", f"{cov_info['coverage_pct']:.1f}%", help="Modeled equipment loads as a percentage of total metered energy.")
                 c_cov2.metric("Unmodeled Load Gap", f"{cov_info['unmodeled_pct']:.1f}%", help="Lighting, small power, plug loads, IT servers, and uninventoried loads.")
                 c_cov3.metric("Total Metered Consumption", f"{cov_info['total_metered_kwh']:,.0f} kWh", help=f"Across {cov_info['observation_days']:.0f} observation days.")
-                st.info(f"ℹ️ {cov_info['explanation']}")
+                st.info(f"{cov_info['explanation']}")
 
             st.markdown("**Preview of recent readings:**")
             preview_display = df.head(5)[["timestamp", "energy_kwh"]].copy()
@@ -745,16 +1136,15 @@ def main() -> None:
                 set_step(STEP_BUILDING)
         with b_next:
             if df is not None and not df.empty:
-                if st.button("Analyze My Energy →", type="primary", use_container_width=True):
+                if st.button("Analyze My Energy →", type="primary", use_container_width=True, key="analyze_my_energy_button"):
                     set_step(STEP_UNDERSTAND)
             else:
                 st.button("Analyze My Energy →", disabled=True, use_container_width=True)
-
     # =========================================================================
     # SCREEN 3: UNDERSTAND ("Here's what your energy is doing")
     # =========================================================================
     elif current_step == STEP_UNDERSTAND:
-        st.markdown("<span class='decision-loop-badge'>STEP 3 OF 5 • EXPECTED VS ACTUAL VS RESIDUAL</span>", unsafe_allow_html=True)
+        st.markdown("<span class='step-badge'>STEP 3 OF 5 • EXPECTED VS ACTUAL VS RESIDUAL</span>", unsafe_allow_html=True)
         st.title("Here's what your energy is doing")
         st.markdown(
             "A transparent comparison of **Expected Energy** (ML forecast under given conditions) vs. "
@@ -790,15 +1180,20 @@ def main() -> None:
                 )
                 st.session_state["explained_episodes"] = explained_episodes
 
+                opportunity_warnings = []
                 opps = identify_energy_opportunities(
                     anomaly_df=anomaly_df,
                     building_profile=b,
                     equipment_list=st.session_state.get("equipment_inventory"),
                     tariff_inr_per_kwh=b.tariff_inr_per_kwh,
+                    warnings=opportunity_warnings,
                 )
                 st.session_state["energy_opportunities"] = opps
+                st.session_state["optimization_warnings"] = opportunity_warnings
+                for warning in opportunity_warnings:
+                    st.warning(warning)
 
-                # Compute key figures (FIX 3: Honest link between ML and headline savings)
+                # Compute key figures
                 total_actual_kwh = float(df["energy_kwh"].sum())
                 total_expected_kwh = float(np.sum(preds))
                 net_residual_kwh = total_actual_kwh - total_expected_kwh
@@ -818,13 +1213,13 @@ def main() -> None:
                 # Honest summary statement
                 if net_residual_kwh <= 0 or abs(net_residual_pct) <= 1.0:
                     st.info(
-                        f"ℹ️ **Overall consumption matches the model; the following hours deviate from expected.** "
+                        f"Overall consumption matches the model; the following hours deviate from expected. "
                         f"(Net residual: {net_residual_kwh:+,.0f} kWh / {net_residual_pct:+.2f}% across {len(df):,} hours; "
                         f"flagged excess hours: {anom_hours} hours, {total_waste_detected:,.0f} kWh)."
                     )
                 else:
                     st.warning(
-                        f"⚠️ **Net consumption exceeded model expected baseline** by {net_residual_kwh:+,.0f} kWh ({net_residual_pct:+.2f}%). "
+                        f"Net consumption exceeded model expected baseline by {net_residual_kwh:+,.0f} kWh ({net_residual_pct:+.2f}%). "
                         f"Flagged excess hours: {anom_hours} hours, {total_waste_detected:,.0f} kWh."
                     )
 
@@ -870,7 +1265,7 @@ def main() -> None:
                     fig.add_annotation(
                         x=peak_spike["timestamp"],
                         y=peak_spike["energy_kwh"],
-                        text="📌 After-hours spike (~86 kWh vs 18 kWh expected)",
+                        text="After-hours spike: 86 kWh vs 18 kWh expected",
                         showarrow=True,
                         arrowhead=2,
                         arrowsize=1,
@@ -878,7 +1273,7 @@ def main() -> None:
                         arrowcolor="#b91c1c",
                         ax=20,
                         ay=-40,
-                        bgcolor="rgba(254, 226, 226, 0.8)",
+                        bgcolor="rgba(254, 226, 226, 0.9)",
                         bordercolor="#b91c1c",
                         borderwidth=1,
                         font=dict(size=12, color="#b91c1c"),
@@ -893,22 +1288,107 @@ def main() -> None:
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                     xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.05)"),
                     yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.05)"),
+                    plot_bgcolor="#ffffff",
+                    paper_bgcolor="#ffffff",
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # Injected Anomaly Recall Self-Test (FIX 6)
+                # Interactive AI Decision Support Card
+                if "ai_insight" not in st.session_state:
+                    try:
+                        opt_for_ai = optimize_equipment_schedule_safely(b, st.session_state.get("equipment_inventory", []), b.tariff_inr_per_kwh)
+                        imp_for_ai = calculate_impact(
+                            opt_for_ai,
+                            b.net_built_up_area_m2,
+                            12.0,
+                            float(st.session_state.get("emission_factor_kg_per_kwh", DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH)),
+                        )
+                        inc_for_ai = find_incentives(b.location_state, b.building_type, st.session_state.get("equipment_inventory", []))
+                        ai_context = build_analysis_context(
+                            profile=b,
+                            equipment=st.session_state.get("equipment_inventory", []),
+                            df=df,
+                            forecast=preds,
+                            anomalies=anomaly_df,
+                            opportunities=opps,
+                            optimization=opt_for_ai,
+                            impact=imp_for_ai,
+                            incentives=inc_for_ai,
+                        )
+                        ai_mgr = AIManager("deterministic")
+                        ai_insight = ai_mgr.interpret(ai_context)
+                        ai_status = ai_mgr.last_status
+                        st.session_state["ai_insight"] = ai_insight
+                        st.session_state["ai_status"] = ai_status
+                    except Exception:
+                        ai_insight = None
+                        ai_status = None
+                else:
+                    ai_insight = st.session_state["ai_insight"]
+                    ai_status = st.session_state.get("ai_status")
+
+                if ai_insight is not None:
+                    provider_pill_label = "Gemini 1.5 Pro" if (ai_status and ai_status.provider == "gemini" and not ai_status.fallback_active) else "Local Reasoning Engine"
+                    provider_pill_cls = "ai-provider-pill-live" if (ai_status and ai_status.provider == "gemini" and not ai_status.fallback_active) else "ai-provider-pill"
+
+                    rec_item = ai_insight.recommendations[0] if ai_insight.recommendations else "Review operational schedules and shift off-hours loads."
+                    st.markdown(
+                        f"""
+                        <div class="ai-card">
+                            <div class="ai-card-title">
+                                <span>EnScale AI Decision Support</span>
+                                <span class="{provider_pill_cls}">{provider_pill_label}</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 16px;">
+                                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 14px 16px; min-width: 0; box-sizing: border-box; word-break: break-word;">
+                                    <div style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Primary Opportunity</div>
+                                    <div style="font-size: 14px; font-weight: 600; color: #ffffff; line-height: 1.4;">{ai_insight.key_finding}</div>
+                                </div>
+                                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 14px 16px; min-width: 0; box-sizing: border-box; word-break: break-word;">
+                                    <div style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Recommended Operational Action</div>
+                                    <div style="font-size: 14px; font-weight: 600; color: #34d399; line-height: 1.4;">{rec_item}</div>
+                                </div>
+                                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 14px 16px; min-width: 0; box-sizing: border-box; word-break: break-word;">
+                                    <div style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Impact Direction & Confidence</div>
+                                    <div style="font-size: 14px; font-weight: 600; color: #38bdf8; line-height: 1.4;">Lower off-hours runtime ({ai_insight.confidence.title()} Confidence)</div>
+                                </div>
+                            </div>
+                            <div style="background: #1e293b; border-radius: 6px; padding: 12px 16px; border-left: 3px solid #38bdf8; font-size: 13px; color: #e2e8f0; line-height: 1.5;">
+                                <b>Why EnScale Flagged This:</b> {ai_insight.summary}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    with st.expander("Technical Evidence, Equipment Upgrades & Methodology Limitations", expanded=False):
+                        if ai_insight.recommendations:
+                            st.markdown("**Structured Operational Recommendations:**")
+                            for r in ai_insight.recommendations:
+                                st.markdown(f"- {r}")
+                        if ai_insight.upgrade_opportunity:
+                            st.markdown(f"**Capital Upgrade Assessment:** {ai_insight.upgrade_opportunity}")
+                        if ai_insight.incentive_explanation:
+                            st.markdown(f"**Policy Alignment:** {ai_insight.incentive_explanation}")
+                        if ai_insight.limitations:
+                            st.markdown("**Engineering Limitations:**")
+                            for lim in ai_insight.limitations:
+                                st.markdown(f"- {lim}")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Injected Anomaly Recall Self-Test
                 recall_info = calculate_injected_anomaly_recall(anomaly_df)
                 with st.expander(
-                    f"🧪 Anomaly Detector Self-Test on Injected Benchmarks: {recall_info['detected_injected_episodes']}/{recall_info['total_injected_episodes']} episodes detected ({recall_info['episode_recall_pct']}%)",
+                    f"Anomaly Detector Benchmark Validation: {recall_info['detected_injected_episodes']}/{recall_info['total_injected_episodes']} episodes detected ({recall_info['episode_recall_pct']}%)",
                     expanded=False,
                 ):
                     st.markdown(f"**Recall Result:** {recall_info['summary_text']}")
                     st.caption("The demonstration dataset contains 5 deterministic injected anomalies. This test verifies detection fidelity without data fabrication.")
                     rec_rows = []
                     for ep in recall_info["episode_details"]:
-                        status_str = "✓ Detected" if ep["is_detected"] else "✗ Missed"
+                        status_str = "Detected" if ep["is_detected"] else "Missed"
                         rec_rows.append({
                             "Date": ep["date"],
                             "Hours": ep["hours"],
@@ -919,28 +1399,28 @@ def main() -> None:
                         })
                     st.dataframe(pd.DataFrame(rec_rows), use_container_width=True)
 
-                # Equipment Baseline Coverage Insight (FIX 5)
+                # Equipment Baseline Coverage Insight
                 eq_inventory = st.session_state.get("equipment_inventory", [])
                 if eq_inventory:
                     eq_calc = calculate_equipment_energy(eq_inventory)
                     cov_info = calculate_equipment_coverage(eq_calc["total_energy"], df)
-                    st.info(f"📊 **Equipment Baseline Coverage:** {cov_info['explanation']}")
+                    st.info(f"**Equipment Baseline Coverage:** {cov_info['explanation']}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # SECTION 4: EXPLAINABLE ANOMALIES
                 st.subheader("Operational Waste & Anomaly Explanations")
                 st.markdown(
-                    "Each flagged event is mapped back to the facility operating schedule and equipment rated loads to provide an **interpretable operational explanation** (FIX 4)."
+                    "Each flagged event is mapped back to the facility operating schedule and equipment rated loads to provide an **interpretable operational explanation**."
                 )
 
                 if explained_episodes:
                     for ep in explained_episodes:
                         st.markdown(
                             f"""
-                            <div style="border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px 18px; margin-bottom: 12px; background-color: #fffaf0;">
+                            <div style="border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px 18px; margin-bottom: 12px; background-color: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span style="font-weight: 700; font-size: 15px; color: #991b1b;">⚠️ {ep['category']} — {ep['time_period']}</span>
+                                    <span style="font-weight: 700; font-size: 15px; color: #991b1b;">{ep['category']} — {ep['time_period']}</span>
                                     <span style="font-size: 12px; font-weight: 600; background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px;">Score: {ep['max_z_score']}σ ({ep['severity'].upper()})</span>
                                 </div>
                                 <div style="font-size: 14px; margin-bottom: 6px;">
@@ -964,7 +1444,7 @@ def main() -> None:
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # SECTION 5: IDENTIFIED ENERGY OPPORTUNITIES (FIX 1, FIX 3)
+                # SECTION 5: IDENTIFIED ENERGY OPPORTUNITIES
                 verified_opps = [o for o in opps if getattr(o, "is_headline_verified", True)]
                 unverified_opps = [o for o in opps if not getattr(o, "is_headline_verified", True)]
 
@@ -978,10 +1458,10 @@ def main() -> None:
                 for opp in verified_opps:
                     st.markdown(
                         f"""
-                        <div style="border: 1px solid #cbd5e1; border-left: 4px solid #0f766e; border-radius: 6px; padding: 16px; margin-bottom: 14px; background-color: #f0fdfa;">
+                        <div style="border: 1px solid #cbd5e1; border-left: 4px solid #1d4ed8; border-radius: 6px; padding: 16px; margin-bottom: 14px; background-color: #f8fafc;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <span style="font-weight: 700; font-size: 16px; color: #115e59;">💡 {opp.opportunity_name}</span>
-                                <span style="font-size: 12px; font-weight: 700; background-color: #ccfbf1; color: #0f766e; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
+                                <span style="font-weight: 700; font-size: 16px; color: #1e3a8a;">{opp.opportunity_name}</span>
+                                <span style="font-size: 12px; font-weight: 700; background-color: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
                             </div>
                             <div style="font-size: 14px; margin-bottom: 6px; color: #334155;">
                                 • <b>Current Condition:</b> {opp.current_condition}<br>
@@ -1017,7 +1497,7 @@ def main() -> None:
                             f"""
                             <div style="border: 1px solid #fed7aa; border-left: 4px solid #f97316; border-radius: 6px; padding: 16px; margin-bottom: 14px; background-color: #fffaf5;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span style="font-weight: 700; font-size: 16px; color: #9a3412;">🔍 {opp.opportunity_name}</span>
+                                    <span style="font-weight: 700; font-size: 16px; color: #9a3412;">{opp.opportunity_name}</span>
                                     <span style="font-size: 12px; font-weight: 700; background-color: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
                                 </div>
                                 <div style="font-size: 14px; margin-bottom: 6px; color: #334155;">
@@ -1054,12 +1534,11 @@ def main() -> None:
         with b_next:
             if st.button("See Where to Save →", type="primary", use_container_width=True):
                 set_step(STEP_IMPROVE)
-
     # =========================================================================
     # SCREEN 4: IMPROVE ("Where can you save?")
     # =========================================================================
     elif current_step == STEP_IMPROVE:
-        st.markdown("<span class='decision-loop-badge'>STEP 4 OF 5 • CONSTRAINED OPERATIONAL OPTIMIZATION</span>", unsafe_allow_html=True)
+        st.markdown("<span class='step-badge'>STEP 4 OF 5 • CONSTRAINED OPERATIONAL OPTIMIZATION</span>", unsafe_allow_html=True)
         st.title("Where can you save?")
         st.markdown(
             "Actionable schedule changes determined by constrained optimization without disrupting building operations."
@@ -1077,7 +1556,7 @@ def main() -> None:
             except Exception:
                 cov_pct = 31.1
 
-        # Emission factor editable input (FIX 2)
+        # Emission factor editable input
         ef_col1, ef_col2 = st.columns([1, 2])
         with ef_col1:
             curr_ef = float(st.session_state.get("emission_factor_kg_per_kwh", DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH))
@@ -1094,17 +1573,22 @@ def main() -> None:
         with ef_col2:
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             st.caption(
-                "⚠️ **Assumed grid emission factor — unverified.** "
+                "**Assumed grid emission factor — unverified.** "
                 "Source: Central Electricity Authority CO₂ Baseline Database (version and year to be confirmed by the user)."
             )
 
         try:
-            opt_res = optimize_equipment_schedule(
+            opt_res = optimize_equipment_schedule_safely(
                 building_profile=b,
                 equipment_list=eq_list,
                 tariff_inr_per_kwh=b.tariff_inr_per_kwh,
             )
             st.session_state["optimization_result"] = opt_res
+            st.session_state["optimization_warnings"] = opt_res.warnings
+            for warning in opt_res.warnings:
+                st.warning(warning)
+            if not opt_res.is_feasible:
+                st.warning(opt_res.status_message)
             impact = calculate_impact(
                 opt_res,
                 net_built_up_area_m2=b.net_built_up_area_m2,
@@ -1188,7 +1672,7 @@ def main() -> None:
                 for r in recs:
                     sched_opt = f"{r.get('optimized_start_time', '08:00')} – {r.get('optimized_stop_time', '18:00')} ({r['optimized_hours_per_day']:.1f}h)"
                     if r.get("start_time_changed"):
-                        sched_opt += " ⚠️ (Comfort/process impact not modeled — verify on site)"
+                        sched_opt += " (Comfort/process impact not modeled — verify on site)"
                     ann_kwh = r.get("annual_energy_savings_kwh", r["modeled_energy_savings_kwh"] * 12.0)
                     ann_inr = r.get("annual_cost_savings_inr", r["modeled_cost_savings_inr"] * 12.0)
                     ann_co2 = r.get("annual_co2_savings_kg", ann_kwh * emission_factor)
@@ -1218,7 +1702,7 @@ def main() -> None:
             a3.metric("Potential Avoided Carbon", f"~{impact.co2_avoided_kg / 1000.0:.1f} tonnes CO₂ / yr", help=f"Derived using emission factor of {emission_factor:.2f} kg CO₂/kWh (Central Electricity Authority CO₂ Baseline Database — unverified).")
 
             # Traceability Expander
-            with st.expander("🔍 Traceability: How was this calculated?", expanded=False):
+            with st.expander("Engineering Traceability & Calculation Methodology", expanded=False):
                 st.markdown(
                     f"""
                     - **Equipment Baseline Savings:** `baseline_energy_kwh - optimized_energy_kwh` = `{opt_res.energy_savings_kwh:,.0f} kWh/month` (`{impact.annual_energy_savings:,.0f} kWh/year`)
@@ -1245,12 +1729,11 @@ def main() -> None:
         with b_next:
             if st.button("Build My Action Plan →", type="primary", use_container_width=True):
                 set_step(STEP_ACTION_PLAN)
-
     # =========================================================================
     # SCREEN 5: ACTION PLAN ("Your Energy Action Plan")
     # =========================================================================
     elif current_step == STEP_ACTION_PLAN:
-        st.markdown("<span class='decision-loop-badge'>STEP 5 OF 5 • EXECUTIVE ACTION PLAN & POLICIES</span>", unsafe_allow_html=True)
+        st.markdown("<span class='step-badge'>STEP 5 OF 5 • EXECUTIVE ACTION PLAN & POLICIES</span>", unsafe_allow_html=True)
         st.title("Your Energy Action Plan")
         st.markdown("Prioritized, evidence-based operational interventions and matched efficiency policies.")
 
@@ -1259,8 +1742,12 @@ def main() -> None:
         opt_res = st.session_state.get("optimization_result")
 
         if opt_res is None:
-            opt_res = optimize_equipment_schedule(b, eq_list, b.tariff_inr_per_kwh)
+            opt_res = optimize_equipment_schedule_safely(b, eq_list, b.tariff_inr_per_kwh)
             st.session_state["optimization_result"] = opt_res
+        for warning in opt_res.warnings:
+            st.warning(warning)
+        if not opt_res.is_feasible:
+            st.warning(opt_res.status_message)
 
         emission_factor = float(st.session_state.get("emission_factor_kg_per_kwh", DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH))
         impact = calculate_impact(
@@ -1270,22 +1757,27 @@ def main() -> None:
             emission_factor_kg_per_kwh=emission_factor,
         )
         matches = st.session_state.get("matched_incentives") or find_incentives(b.location_state, b.building_type, eq_list)
+        opportunity_warnings = []
         opps = identify_energy_opportunities(
             st.session_state.get("anomaly_df"),
             b,
             eq_list,
             b.tariff_inr_per_kwh,
             emission_factor_kg_per_kwh=emission_factor,
+            warnings=opportunity_warnings,
         )
+        for warning in opportunity_warnings:
+            if warning not in opt_res.warnings:
+                st.warning(warning)
         st.session_state["energy_opportunities"] = opps
 
-        # SECTION 12: ENSCALE DECISION SUMMARY (The first thing judges see - FIX 1, FIX 3)
+        # ENSCALE DECISION SUMMARY
         dec_summary = generate_decision_summary(opps, opt_res, impact, matches, b, st.session_state.get("anomaly_df"))
         st.markdown(
             f"""
             <div style="background-color: #0f172a; color: #ffffff; border-radius: 8px; padding: 20px 24px; margin-bottom: 24px; box-sizing: border-box;">
                 <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: #38bdf8; margin-bottom: 14px; letter-spacing: 0.5px;">
-                    ⚡ EnScale Executive Decision Summary
+                    EnScale Executive Decision Summary
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; box-sizing: border-box;">
                     <div style="background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 14px 16px; min-width: 0; box-sizing: border-box; word-break: break-word;">
@@ -1328,7 +1820,7 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        # Prioritized Action Cards (FIX 1, FIX 3)
+        # Prioritized Action Cards
         st.subheader("Prioritized Operational Interventions (Schedule-Derived Savings)")
         st.caption("Operational interventions derived directly from constrained schedule optimization. Reconciled with Decision Summary.")
 
@@ -1341,7 +1833,7 @@ def main() -> None:
                 <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 14px; background-color: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-size: 16px; font-weight: 700; color: #0f172a;">{i}. {opp.opportunity_name}</span>
-                        <span style="font-size: 11px; font-weight: 700; background-color: #ccfbf1; color: #0f766e; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
+                        <span style="font-size: 11px; font-weight: 700; background-color: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
                     </div>
                     <div style="font-size: 14px; margin-bottom: 6px;"><b>Current Operating Baseline:</b> {opp.current_condition}</div>
                     <div style="font-size: 14px; margin-bottom: 6px;"><b>Recommended Action:</b> {opp.possible_intervention}</div>
@@ -1364,7 +1856,7 @@ def main() -> None:
                     f"""
                     <div style="border: 1px solid #fed7aa; border-radius: 8px; padding: 18px; margin-bottom: 14px; background-color: #fffaf5; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 16px; font-weight: 700; color: #9a3412;">🔍 {opp.opportunity_name}</span>
+                            <span style="font-size: 16px; font-weight: 700; color: #9a3412;">{opp.opportunity_name}</span>
                             <span style="font-size: 11px; font-weight: 700; background-color: #ffedd5; color: #c2410c; padding: 2px 8px; border-radius: 4px;">[{opp.basis}]</span>
                         </div>
                         <div style="font-size: 14px; margin-bottom: 6px;"><b>Operational Condition:</b> {opp.current_condition}</div>
@@ -1411,7 +1903,7 @@ def main() -> None:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Matched Policies & Incentives with "Why this was matched" (FIX 1, FIX 7)
+        # Matched Policies & Incentives
         st.subheader("Potentially Relevant Policies & Tariff Incentives")
         st.caption("Matched against your facility type, location state, and equipment characteristics. Eligibility requires formal verification.")
 
@@ -1455,10 +1947,10 @@ def main() -> None:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Environmental Impact Statement (Potential vs Realized - FIX 2)
+        # Environmental Impact Statement
         st.subheader("Environmental Impact: Potential Avoided Emissions")
         st.info(
-            f"🌱 **Potential Avoided Emissions:** If the recommended operational changes are implemented, "
+            f"**Potential Avoided Emissions:** If the recommended operational changes are implemented, "
             f"estimated avoided emissions are approximately **{impact.co2_avoided_kg / 1000.0:.1f} tonnes CO₂ per year** "
             f"({impact.co2_avoided_kg:,.0f} kg CO₂/year at {emission_factor:.2f} kg/kWh).\n\n"
             f"• **Emission Factor Used:** {emission_factor:.2f} kg CO₂/kWh (Source: Central Electricity Authority CO₂ Baseline Database (version and year to be confirmed by the user) — Assumed grid emission factor, unverified).\n"
@@ -1498,20 +1990,20 @@ def main() -> None:
         d_col1, d_col2 = st.columns([1, 1])
         with d_col1:
             st.download_button(
-                label="📥 Download Executive Action Plan (.txt)",
+                label="Download Executive Action Plan (.txt)",
                 data=plan_summary_text,
                 file_name="enscale_executive_action_plan.txt",
                 mime="text/plain",
                 use_container_width=True,
             )
         with d_col2:
-            if st.button("🔄 Reset / Start Over", use_container_width=True):
+            if st.button("Start Over", use_container_width=True):
                 set_step(STEP_BUILDING)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
 
-        # Collapsed Technical Appendix for Hackathon Judges & Energy Engineers
-        with st.expander("⚙️ Technical Appendix & Audit Traceability", expanded=False):
+        # Collapsed Technical Appendix
+        with st.expander("Technical Appendix & Methodology Audit", expanded=False):
             eval_metrics = load_evaluation_metrics()
             test_m = eval_metrics.get("test_comparison", {}).get("ml_metrics", {}) if eval_metrics else {}
 

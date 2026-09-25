@@ -2,7 +2,7 @@
 
 **STATUS:** Deterministic energy engine preserved; structured optional AI backend added
 **CURRENT_STAGE:** Backend AI and analysis integration
-**TEST_SUITE_RESULT:** Baseline before implementation: 80 passed. Post-integration result is recorded after final verification below.
+**TEST_SUITE_RESULT:** 112 passed / 0 failed at the latest full run.
 
 ---
 
@@ -76,7 +76,7 @@ Redesigned the entire interface from an engineering-heavy configuration tool int
 | `tests/test_incentives.py` | 8 curated Indian schemes, geography/technology matching, terminology safeguards, payback. | **PASS** (9/9) |
 | `tests/test_opportunity_and_decision_loop.py` | Energy opportunities, explainable episodes, decision summary, human verification contract, proportional CO2, needed_from_opening constraint, net residual language, and manifest independence. | **PASS** (14/14) |
 | `tests/test_end_to_end.py` | Complete end-to-end chains across demo, user data, and equipment baseline modes. | **PASS** (9/9) |
-| **TOTAL** | **Comprehensive Full Regression Suite** | **78 / 78 PASS** |
+| **TOTAL** | **Historical regression matrix before backend additions** | **78 / 78 PASS** |
 
 ---
 
@@ -91,8 +91,10 @@ Redesigned the entire interface from an engineering-heavy configuration tool int
 - Added a structured AI provider interface for deterministic, Ollama, Gemini (`google-genai`), and OpenAI-compatible endpoints.
 - Provider errors and malformed outputs retry once, then activate deterministic local reasoning. The selected provider is never replaced with a different cloud provider.
 - Added a backend analysis pipeline, structured report/progress contracts, safe health diagnostic, `.env.example`, setup guide, and API-focused tests.
-- Existing `app.py` has not been changed; the Streamlit UI does not yet call the new analysis pipeline.
+- `app.py` keeps UI ownership while calling the existing deterministic services; the separate backend analysis pipeline remains available for integration.
 - This status file previously cited 78 tests; the audited pre-change repository had 80 passing tests.
-- Final verification: `pytest -q` → **93 passed, 1 warning, 0 failed**. The warning is the existing invalid-timestamp parsing warning in the ingestion test.
+- Final verification before `.env` loading fix: `pytest -q` → **93 passed, 1 warning, 0 failed**. The warning is the existing invalid-timestamp parsing warning in the ingestion test.
 - Demo flow verification: `python scripts/run_demo_headless.py` completed and printed forecast, anomaly, opportunity, optimization, impact, incentive, coverage, and recall results.
-- Current configured provider: `deterministic`; `python scripts/check_ai.py` reports generation test PASS and fallback NOT ACTIVE.
+- Before `.env` loading was corrected, the health command defaulted to `deterministic` and reported generation test PASS.
+- `.env` loading fix: application configuration and `AIManager` load `.env` with `python-dotenv` while preserving shell overrides. Added tests for Gemini and deterministic provider selection. With the local `.env` selecting Gemini, diagnostic correctly reports Gemini selected; current remote generation health is unavailable and deterministic fallback is active.
+- Equipment safety/editor verification: strict optimization still raises `InfeasibleConstraintError` when directly given invalid constraints; app and opportunity analysis use the safe filtered optimizer. Building equipment supports add/edit/remove with operating-window validation. Latest full suite: **112 passed**.

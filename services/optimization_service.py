@@ -22,11 +22,19 @@ import numpy as np
 
 from domain.models import BuildingProfile, Equipment, OptimizationResult
 from config.constants import DEFAULT_TARIFF_INR_PER_KWH, DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH
+from services.equipment_service import validate_equipment_for_building
 
 
 class InfeasibleConstraintError(ValueError):
     """Raised when equipment scheduling operational constraints cannot be satisfied."""
     pass
+
+
+def _as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def compute_modeled_savings(
@@ -127,10 +135,26 @@ def optimize_equipment_schedule(
 
     # 2. Process each equipment item
     for item in equipment_list:
-        if isinstance(item, Equipment):
-            eq = item
-        else:
-            eq = Equipment.from_dict(item)
+        raw_equipment = item.to_dict() if isinstance(item, Equipment) else item
+        validation = validate_equipment_for_building(raw_equipment, building_profile)
+        if not validation.is_valid:
+            details = "; ".join(validation.errors)
+            minimum = raw_equipment.get("minimum_hours")
+            maximum = raw_equipment.get("maximum_hours")
+            equipment_name = raw_equipment.get("equipment_name", "Unknown equipment")
+            equipment_id = raw_equipment.get("equipment_id", "UNKNOWN")
+            min_value, max_value = _as_float(minimum), _as_float(maximum)
+            if min_value is not None and max_value is not None and min_value > max_value:
+                details = f"minimum_hours ({minimum}) exceeds maximum_hours ({maximum}). No feasible solution. " + details
+            elif min_value is not None and min_value > window_hours:
+                details = (f"minimum runtime ({minimum}h) exceeds building operating window "
+                           f"({window_hours:g}h). No feasible solution. " + details)
+            msg = f"Invalid equipment '{equipment_name}' ({equipment_id}): " + details
+            if raise_on_infeasible:
+                raise InfeasibleConstraintError(msg)
+            return OptimizationResult(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     is_feasible=False, status_message=msg)
+        eq = item if isinstance(item, Equipment) else Equipment.from_dict(item)
 
         power = eq.rated_power_kw
         qty = eq.quantity
@@ -386,6 +410,56 @@ def optimize_equipment_schedule(
     )
     res.schedule_recommendations = recommendations
     return res
+
+
+def optimize_equipment_schedule_safely(
+    building_profile: Union[BuildingProfile, Dict[str, Any]],
+    equipment_list: List[Union[Equipment, Dict[str, Any]]],
+    tariff_inr_per_kwh: Optional[float] = None,
+    step_hours: float = 0.5,
+    emission_factor_kg_per_kwh: float = DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH,
+) -> OptimizationResult:
+    """Optimize only valid items and expose exclusions without fabricating schedules."""
+    valid_items: List[Equipment] = []
+    warnings: List[str] = []
+    window = float(building_profile["operating_end"] - building_profile["operating_start"]) if isinstance(building_profile, dict) else float(building_profile.operating_end - building_profile.operating_start)
+    for item in equipment_list:
+        raw_equipment = item.to_dict() if isinstance(item, Equipment) else item
+        validation = validate_equipment_for_building(raw_equipment, building_profile)
+        if validation.is_valid:
+            eq = item if isinstance(item, Equipment) else Equipment.from_dict(item)
+            valid_items.append(eq)
+            continue
+        name = raw_equipment.get("equipment_name", "Equipment")
+        minimum = raw_equipment.get("minimum_hours")
+        maximum = raw_equipment.get("maximum_hours")
+        runtime = raw_equipment.get("hours_per_day")
+        min_value, max_value, runtime_value = _as_float(minimum), _as_float(maximum), _as_float(runtime)
+        if min_value is not None and min_value > window:
+            message = (f"{name} could not be optimized because its minimum runtime exceeds the building "
+                       "operating window. Review its operating hours.")
+        elif max_value is not None and max_value > window:
+            message = (f"{name} could not be optimized because its maximum runtime exceeds the building "
+                       "operating window. Review its operating hours.")
+        elif runtime_value is not None and runtime_value > window:
+            message = (f"{name} could not be optimized because its runtime exceeds the building "
+                       "operating window. Review its operating hours.")
+        else:
+            message = f"{name} has invalid operating constraints: {'; '.join(validation.errors)}. Review its configuration."
+        warnings.append(message)
+
+    if not valid_items:
+        return OptimizationResult(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                  schedule_recommendations=[], is_feasible=False,
+                                  status_message="No feasible optimization candidates; no schedule or savings were calculated.",
+                                  warnings=warnings)
+
+    result = optimize_equipment_schedule(building_profile, valid_items, tariff_inr_per_kwh,
+        step_hours=step_hours, emission_factor_kg_per_kwh=emission_factor_kg_per_kwh)
+    if warnings:
+        result.warnings = warnings
+        result.status_message += " Invalid equipment was excluded; results cover feasible equipment only."
+    return result
 
 
 class OptimizationService:

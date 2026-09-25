@@ -5,11 +5,11 @@
     "equipment_name": "Main Chiller Unit 1",
     "rated_power_kw": 45.0,
     "quantity": 2,
-    "hours_per_day": 10.0,
+    "hours_per_day": 8.0,
     "operating_days": 22,
     "utilization_factor": 0.75,
     "minimum_hours": 6.0,
-    "maximum_hours": 12.0,
+    "maximum_hours": 8.0,
     "is_flexible": true
   },
   {
@@ -18,11 +18,11 @@
     "equipment_name": "Office Floor LED Lighting",
     "rated_power_kw": 12.0,
     "quantity": 1,
-    "hours_per_day": 11.0,
+    "hours_per_day": 8.0,
     "operating_days": 22,
     "utilization_factor": 0.9,
     "minimum_hours": 8.0,
-    "maximum_hours": 12.0,
+    "maximum_hours": 8.0,
     "is_flexible": false
   },
   {
@@ -31,11 +31,11 @@
     "equipment_name": "Chilled Water Circulation Pumps",
     "rated_power_kw": 7.5,
     "quantity": 2,
-    "hours_per_day": 10.0,
+    "hours_per_day": 8.0,
     "operating_days": 22,
     "utilization_factor": 0.8,
     "minimum_hours": 5.0,
-    "maximum_hours": 10.0,
+    "maximum_hours": 8.0,
     "is_flexible": true
   }
 ]

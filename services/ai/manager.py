@@ -1,4 +1,5 @@
 import os
+from config.environment import load_environment
 from services.ai.deterministic_provider import DeterministicProvider
 from services.ai.gemini_provider import GeminiProvider
 from services.ai.ollama_provider import OllamaProvider
@@ -9,6 +10,7 @@ from services.ai.schemas import ProviderStatus, StructuredAnalysisContext
 class AIManager:
     """Uses exactly the selected provider; failure falls back locally only."""
     def __init__(self, provider=None):
+        load_environment()
         name = (provider or os.getenv("AI_PROVIDER", "deterministic")).strip().lower()
         providers = {"deterministic": DeterministicProvider, "ollama": OllamaProvider,
                      "gemini": GeminiProvider, "openai": OpenAIProvider}

@@ -179,6 +179,7 @@ class OptimizationResult:
     savings_statement: str = "Projected savings under the modeled operating constraints"
     is_feasible: bool = True
     status_message: str = "Feasible schedule found"
+    warnings: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -271,4 +272,3 @@ class EnergyOpportunity:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-

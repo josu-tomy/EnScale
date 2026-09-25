@@ -12,7 +12,7 @@ from services.baseline_service import calculate_equipment_energy
 from services.impact_service import calculate_impact
 from services.incentive_service import find_incentives
 from services.opportunity_service import identify_energy_opportunities
-from services.optimization_service import optimize_equipment_schedule
+from services.optimization_service import optimize_equipment_schedule_safely
 from services.validation_service import validate_building_profile, validate_energy_dataframe, validate_equipment
 
 
@@ -127,11 +127,12 @@ def analyze_energy(profile, equipment, df, predictor=None, ai_manager=None, emis
         forecast = predictor.predict(df)
         done(current)
         begin(AnalysisStage.CHECKING_ANOMALIES.value)
-        anomalies = detect_anomalies(df.energy_kwh, forecast, df.timestamp, profile.tariff_inr_per_kwh); done(current)
+        anomalies = detect_anomalies(df.energy_kwh, forecast, df.timestamp,
+                                     tariff_inr_per_kwh=profile.tariff_inr_per_kwh); done(current)
         begin(AnalysisStage.FINDING_OPPORTUNITIES.value)
         opportunities = identify_energy_opportunities(anomalies, profile, equipment, profile.tariff_inr_per_kwh, emission_factor_kg_per_kwh); done(current)
         begin(AnalysisStage.OPTIMIZING_ACTIONS.value)
-        optimization = optimize_equipment_schedule(profile, equipment, profile.tariff_inr_per_kwh); done(current)
+        optimization = optimize_equipment_schedule_safely(profile, equipment, profile.tariff_inr_per_kwh); done(current)
         begin(AnalysisStage.CALCULATING_IMPACT.value)
         impact = calculate_impact(optimization, profile.net_built_up_area_m2, 12.0, emission_factor_kg_per_kwh); done(current)
         begin(AnalysisStage.MATCHING_INCENTIVES.value)

@@ -20,6 +20,19 @@ def sample_context():
     return StructuredAnalysisContext({"actual_energy_kwh": 123.0}, [{"title": "Review after-hours usage", "recommended_action": "Check shutdown schedules."}], ["Meter data cannot identify equipment root cause."])
 
 
+def test_environment_selects_gemini_provider(monkeypatch):
+    from services.ai.gemini_provider import GeminiProvider
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    manager = AIManager()
+    assert isinstance(manager.provider, GeminiProvider)
+
+
+def test_environment_selects_deterministic_provider(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+    manager = AIManager()
+    assert isinstance(manager.provider, DeterministicProvider)
+
+
 def test_deterministic_provider_returns_structured_insight():
     result = DeterministicProvider().generate(sample_context())
     assert result.key_finding == "Review after-hours usage"

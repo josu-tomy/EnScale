@@ -31,7 +31,7 @@ import numpy as np
 
 from domain.models import BuildingProfile, Equipment, EnergyOpportunity, OptimizationResult, ImpactResult
 from config.constants import DEFAULT_TARIFF_INR_PER_KWH, DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH
-from services.optimization_service import optimize_equipment_schedule
+from services.optimization_service import optimize_equipment_schedule_safely
 
 
 def explain_anomaly_episodes(
@@ -194,6 +194,7 @@ def identify_energy_opportunities(
     tariff_inr_per_kwh: float = DEFAULT_TARIFF_INR_PER_KWH,
     emission_factor_kg_per_kwh: float = DEFAULT_GRID_EMISSION_FACTOR_KG_PER_KWH,
     annualization_months: float = 12.0,
+    warnings: Optional[List[str]] = None,
 ) -> List[EnergyOpportunity]:
     """
     Identifies, tags, and quantifies actionable 'Energy Opportunities' (FIX 1, FIX 2, FIX 3, FIX 4).
@@ -211,12 +212,14 @@ def identify_energy_opportunities(
 
     # 1. If equipment inventory is provided, optimize schedules to derive schedule-derived savings
     if equipment_list:
-        opt_res = optimize_equipment_schedule(
+        opt_res = optimize_equipment_schedule_safely(
             building_profile=building_profile,
             equipment_list=equipment_list,
             tariff_inr_per_kwh=tariff_inr_per_kwh,
             emission_factor_kg_per_kwh=emission_factor_kg_per_kwh,
         )
+        if warnings is not None:
+            warnings.extend(opt_res.warnings)
 
         for rec in opt_res.schedule_recommendations:
             if not rec.get("is_flexible", False) or rec.get("modeled_energy_savings_kwh", 0.0) <= 0:
